@@ -1,0 +1,7 @@
+{
+  "name": "Local Resilience Toolkit",
+  "description": "A suite of 'clone-and-own' tools for local community organizers, featuring offline-first event coordination, secure phone trees, and mutual aid boards with zero central infrastructure.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
