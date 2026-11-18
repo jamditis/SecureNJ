@@ -8,7 +8,6 @@ import ConsensusBuilder from './ConsensusBuilder';
 import MutualAid from './MutualAid';
 import PhoneTree from './PhoneTree';
 import Sightings from './Sightings';
-import SpaceDialog from './SpaceDialog';
 import StatusBoard from './StatusBoard';
 import { createTestSync, renderWithSync } from './test-utils';
 
@@ -272,35 +271,6 @@ describe('phone tree', () => {
     expect(di).toContain('Ben (2)');
     expect(di).not.toContain('Ana');
     expect(di).not.toContain('Cy');
-  });
-});
-
-describe('space dialog', () => {
-  it('does not open a space with a weak passphrase', async () => {
-    // The signaling server sees the room ID and can test guesses of the passphrase.
-    const user = userEvent.setup();
-    const joined: unknown[] = [];
-    const sync = createTestSync({ join: (config) => joined.push(config) });
-    renderWithSync(<SpaceDialog onClose={() => {}} />, sync);
-    const open = screen.getByRole<HTMLButtonElement>('button', { name: 'Open the space' });
-    const passphrase = document.querySelector<HTMLInputElement>('input[type=password]')!;
-
-    await user.type(screen.getByLabelText('Space name'), 'Ironbound');
-    await user.type(passphrase, 'short');
-    expect(open.disabled).toBe(true);
-
-    await user.type(passphrase, ' but now long enough');
-    expect(open.disabled).toBe(false);
-    await user.click(open);
-    expect(joined).toEqual([{ name: 'Ironbound', passphrase: 'short but now long enough', signaling: [] }]);
-  });
-
-  it('makes a passphrase of six random words', async () => {
-    const user = userEvent.setup();
-    renderWithSync(<SpaceDialog onClose={() => {}} />);
-    await user.click(screen.getByRole('button', { name: 'Make a random passphrase' }));
-    const field = screen.getByDisplayValue(/^([a-z]+ ){5}[a-z]+$/);
-    expect(field).toBeTruthy();
   });
 });
 

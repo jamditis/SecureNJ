@@ -1,22 +1,23 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { Database, HardDrive, Languages, Menu, Shield, Users, X } from 'lucide-react';
+import { Database, Languages, Menu, Shield, X } from 'lucide-react';
 import ConsensusBuilder from './components/ConsensusBuilder';
 import Dashboard from './components/Dashboard';
 import DeviceDialog from './components/DeviceDialog';
 import EventCreator from './components/EventCreator';
 import FamilyPlan from './components/FamilyPlan';
 import LimitsPage from './components/LimitsPage';
+import LockFile from './components/LockFile';
 import MutualAid from './components/MutualAid';
 import PhoneTree from './components/PhoneTree';
 import PhotoCleaner from './components/PhotoCleaner';
 import ResourceSheet from './components/ResourceSheet';
 import ResourcesPage from './components/ResourcesPage';
+import RoomGate from './components/RoomGate';
 import RightsCard from './components/RightsCard';
 import SecureShare from './components/SecureShare';
 import SharePage from './components/SharePage';
 import ShiftRoster from './components/ShiftRoster';
 import Sightings from './components/Sightings';
-import SpaceDialog from './components/SpaceDialog';
 import StatusBoard from './components/StatusBoard';
 import SupplyInventory from './components/SupplyInventory';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
@@ -24,7 +25,7 @@ import { Notice } from './components/ui';
 import WitnessNotes from './components/WitnessNotes';
 import { LOCALES, useI18n, type Locale } from './services/i18n';
 import { readInvite } from './services/invite';
-import { useSync } from './services/sync';
+import { ToolScope, useRooms } from './services/sync';
 import { PAGES, SECTIONS, TOOLS, goToPage, readRoute } from './tools';
 import type { ToolId } from './types';
 
@@ -32,6 +33,7 @@ const VIEWS: Record<Exclude<ToolId, 'dashboard' | 'secure-share'>, ComponentType
   limits: LimitsPage,
   resources: ResourcesPage,
   share: SharePage,
+  'lock-file': LockFile,
   'event-creator': EventCreator,
   'rights-card': RightsCard,
   'family-plan': FamilyPlan,
@@ -48,9 +50,40 @@ const VIEWS: Record<Exclude<ToolId, 'dashboard' | 'secure-share'>, ComponentType
   'supply-inventory': SupplyInventory,
 };
 
+interface PageProps {
+  id: ToolId;
+  /** The part of the address after the page, for example locked text in a link. */
+  payload: string;
+  title: string;
+  /** True for a tool that has a room. */
+  shared: boolean;
+  onSelectTool: (id: ToolId) => void;
+}
+
+/** The content of one page, with the data scope that the page needs. */
+function Page({ id, payload, title, shared, onSelectTool }: PageProps) {
+  if (id === 'dashboard') return <Dashboard onSelectTool={onSelectTool} />;
+  if (id === 'secure-share') return <SecureShare key={payload} lockedFromLink={payload} />;
+  const View = VIEWS[id];
+  if (id === 'limits' || id === 'resources' || id === 'share') return <View />;
+  if (shared) {
+    // Each shared tool has its own room. The key gives each tool a new form.
+    return (
+      <RoomGate key={id} tool={id} title={title}>
+        <View />
+      </RoomGate>
+    );
+  }
+  return (
+    <ToolScope tool={id}>
+      <View />
+    </ToolScope>
+  );
+}
+
 export default function App() {
   const { t, locale, setLocale } = useI18n();
-  const { space, peers, spaceFailed } = useSync();
+  const { setLastRoom } = useRooms();
   // An invite link opens the space dialog. The invite is then removed from the
   // address, so that it is not in the history or in a copied address.
   const [invite] = useState(() => {
@@ -62,7 +95,7 @@ export default function App() {
   // then works, and so does the back button of the browser.
   const [route, setRoute] = useState(() => readRoute(window.location.hash));
   const activeTool = route.page;
-  const setActiveTool = goToPage;
+  const setActiveTool = (id: ToolId) => goToPage(id, t('nav.unsavedConfirm'));
   useEffect(() => {
     const onHashChange = () => {
       setRoute(readRoute(window.location.hash));
@@ -72,7 +105,10 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSpaceOpen, setIsSpaceOpen] = useState(invite !== null && space === null);
+  // The invite fills the form of each room. The member still types the passphrase.
+  useEffect(() => {
+    if (invite) setLastRoom(invite);
+  }, [invite, setLastRoom]);
   const [isDeviceOpen, setIsDeviceOpen] = useState(false);
 
   const navButton = (id: ToolId, label: string, Icon: ComponentType<{ className?: string }>) => (
@@ -91,7 +127,7 @@ export default function App() {
       </button>
     </li>
   );
-  const ActiveView = activeTool === 'dashboard' || activeTool === 'secure-share' ? null : VIEWS[activeTool];
+  const activeInfo = TOOLS.find((tool) => tool.id === activeTool);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -107,7 +143,7 @@ export default function App() {
 
       <nav
         aria-label={t('nav.label')}
-        className={`no-print fixed inset-0 top-14 z-30 bg-slate-900 text-slate-300 transition-transform md:translate-x-0 md:static md:w-72 md:shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`no-print fixed inset-0 top-14 z-30 bg-slate-900 text-slate-300 transition-transform md:translate-x-0 md:sticky md:top-0 md:h-screen md:w-72 md:shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="p-6 h-full flex flex-col gap-6 overflow-y-auto">
           <div className="hidden md:flex items-center gap-3">
@@ -128,17 +164,6 @@ export default function App() {
           ))}
 
           <div className="mt-auto space-y-3">
-            <button
-              type="button"
-              onClick={() => setIsSpaceOpen(true)}
-              className="w-full bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors"
-            >
-              <span className="flex items-center gap-2 text-white text-sm font-bold">
-                {space ? <Users className="w-4 h-4 text-emerald-400" aria-hidden="true" /> : <HardDrive className="w-4 h-4 text-slate-400" aria-hidden="true" />}
-                {space ? space.name : t('sync.localOnly')}
-              </span>
-              <span className="block text-xs text-slate-400 mt-1">{space ? t('nav.spacePeers', { count: peers }) : t('nav.spaceJoin')}</span>
-            </button>
             <button
               type="button"
               onClick={() => setIsDeviceOpen(true)}
@@ -166,20 +191,14 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-1 min-w-0 p-4 md:p-10 lg:p-16">
+      {/* Spell check can send what a person types to a service. The page about limits says that it is off. */}
+      <main spellCheck={false} autoCorrect="off" className="flex-1 min-w-0 p-4 md:p-10 lg:p-16">
         <div className="max-w-5xl mx-auto space-y-6">
-          {spaceFailed && <Notice tone="error">{t('sync.spaceFailed')}</Notice>}
-          {activeTool === 'secure-share' ? (
-            <SecureShare key={route.payload} lockedFromLink={route.payload} />
-          ) : ActiveView ? (
-            <ActiveView />
-          ) : (
-            <Dashboard onSelectTool={setActiveTool} onOpenSpace={() => setIsSpaceOpen(true)} />
-          )}
+          {invite && activeTool === 'dashboard' && <Notice tone="warning">{t('invite.received', { name: invite.name })}</Notice>}
+          <Page id={activeTool} payload={route.payload} title={activeInfo ? t(activeInfo.title) : ''} shared={activeInfo?.scope === 'shared'} onSelectTool={setActiveTool} />
         </div>
       </main>
 
-      {isSpaceOpen && <SpaceDialog onClose={() => setIsSpaceOpen(false)} invite={space ? null : invite} />}
       {isDeviceOpen && <DeviceDialog onClose={() => setIsDeviceOpen(false)} />}
     </div>
   );

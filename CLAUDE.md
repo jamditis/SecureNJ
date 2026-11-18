@@ -1,13 +1,13 @@
 # SecureNJ
 
-A browser-only toolkit for community organizers. No backend. Data is in IndexedDB through Yjs and syncs peer to peer in a "space" that a group opens with a name and a passphrase.
+A browser-only toolkit for community organizers. No backend. The data of shared tools is in IndexedDB through Yjs and syncs peer to peer in a room that a group opens with a name and a passphrase. Each shared tool has its own room. The UI is in English and Spanish.
 
-Read `docs/architecture.md` first. Read `docs/security.md` before you change `services/crypto.ts`, `services/space.ts`, or `services/sync.tsx`.
+Read `docs/architecture.md` first. Read `docs/security.md` before you change `services/crypto.ts`, `services/space.ts`, `services/sync.tsx`, or `services/wipe.ts`. The page `components/LimitsPage.tsx` and `docs/security.md` state the same limits: change them together.
 
 ## Commands
 
 - `npm run dev`: dev server on port 3000
-- `npm run check`: type check, lint, tests, build, end-to-end test. Run it before each commit.
+- `npm run check`: type check, lint, tests, build, end-to-end test. Run it before each commit, with no pipe after it.
 - `npm test`: unit and component tests only
 - `npm run e2e`: end-to-end test. It makes its own build.
 - `npm run signaling`: local signaling server on port 4444
@@ -16,53 +16,55 @@ Read `docs/architecture.md` first. Read `docs/security.md` before you change `se
 
 Root:
 
-- `index.html`, `index.tsx`, `index.css`: entry. Tailwind 4, system fonts.
-- `App.tsx`: navigation, the space dialog, and the active tool.
-- `tools.ts`: the list of tools. Add a tool here and in `VIEWS` in `App.tsx`.
-- `types.ts`: record types.
+- `index.html`, `index.tsx`, `index.css`: entry. Tailwind 4, system fonts. `index.tsx` registers the service worker.
+- `App.tsx`: navigation by section, page addresses, and the data scope of the active page.
+- `tools.ts`: the lists of pages, sections, and tools, and the address reader. Add a tool here and in `VIEWS` in `App.tsx`.
+- `types.ts`: record types of the first tools.
 - `vite.config.ts`: build, content security policy, test config.
 - `test-setup.ts`: IndexedDB and Web Crypto for tests.
+- `public/sw.js`: service worker for offline start. `public/manifest.webmanifest`, icons.
 
-`components/` (one file for each tool; no storage or network code):
+`components/` (one file for each tool or page; no storage or network code):
 
-- `Dashboard.tsx`: tool cards with live counts, space status.
-- `Sightings.tsx`: safety alerts.
-- `StatusBoard.tsx`: group check-in.
-- `ConsensusBuilder.tsx`: proposals and positions.
-- `TacticalWhiteboard.tsx`: shared canvas.
-- `MutualAid.tsx`: requests and offers.
-- `EventCreator.tsx`: encrypted event page.
-- `PhoneTree.tsx`: contacts and call tree. Private document.
-- `SecureShare.tsx`: text and file encryption.
-- `SpaceDialog.tsx`: create, join, leave a space.
-- `ui.tsx`: shared parts (Button, Modal, Field, PassphraseInput, ToolHeader).
-- `test-utils.tsx`, `tools.test.tsx`: component tests.
+- Pages: `Dashboard.tsx` (start page), `LimitsPage.tsx`, `ResourcesPage.tsx`, `SharePage.tsx`.
+- Send: `SecureShare.tsx` (lock a message), `LockFile.tsx`, `EventCreator.tsx`.
+- Ready: `RightsCard.tsx`, `FamilyPlan.tsx`, `PhoneTree.tsx` (private document).
+- Document: `WitnessNotes.tsx`, `PhotoCleaner.tsx`, `ResourceSheet.tsx`.
+- Group (each inside `RoomGate`): `Sightings.tsx` (safety alerts), `StatusBoard.tsx`, `MutualAid.tsx`, `ConsensusBuilder.tsx`, `TacticalWhiteboard.tsx`, `ShiftRoster.tsx`, `SupplyInventory.tsx`.
+- `RoomGate.tsx`: the room form, the room settings (invite, backup, leave, clear).
+- `DeviceDialog.tsx`: erase all data. `QrCode.tsx`: QR code as SVG.
+- `ui.tsx`: shared parts (Button, Modal, Field, PassphraseInput, PassphraseModal, ToolHeader).
+- `test-utils.tsx` and `*.test.tsx`: component tests.
 
 `services/` (logic; tests are in `*.test.ts` next to the code):
 
-- `sync.tsx`: `SyncProvider`, `useSync`, `useRecords`, `useSharedSetting`, `useOnlineMembers`.
-- `space.ts`: key derivation for a space, signaling address parser, saved space.
-- `crypto.ts`: passphrase encryption for text and files.
-- `passphrase.ts`: random passphrase.
+- `sync.tsx`: `SyncProvider`, `ToolScope`, `useRooms`, `useSync`, `useRecords`, `useSharedSetting`, `useOnlineMembers`, `openSession`.
+- `space.ts`: key derivation for the room of a tool, signaling address parser.
+- `crypto.ts`: passphrase encryption for text and files. `passphrase.ts`: random passphrase and the rule for a new passphrase.
+- `wipe.ts`: erase all data of the app. `backup.ts`: encrypted backup of one document. `invite.ts`: invite link.
 - `schema.ts`: type guards and key functions for records from peers and files.
-- `retention.ts`: expiry of shared records (`purgeExpired`, run by `sync.tsx` at all times).
-- `alerts.ts`, `aid.ts`, `status.ts`, `consensus.ts`, `phoneTree.ts`, `whiteboard.ts`: logic for one tool each.
-- `eventExport.ts`: builds the event page.
-- `identity.ts`: member ID for each space, and display name.
-- `i18n.ts`: `useT`. `time.ts`: relative time. `download.ts`: save a file. `config.ts`: build settings.
+- `retention.ts`: expiry of shared records and delete of child records (`purgeExpired`, run by `sync.tsx` at all times).
+- One file for the logic of each tool: `alerts.ts`, `aid.ts`, `status.ts`, `consensus.ts`, `phoneTree.ts`, `whiteboard.ts`, `shifts.ts`, `supplies.ts`, `witness.ts`, `rights.ts`, `family.ts`, `photo.ts`, `sheet.ts`, `sharePage.ts`, `lockLink.ts`.
+- `eventExport.ts`, `lockedFile.ts`: build the HTML files that decrypt themselves.
+- `identity.ts`: member ID for each room, and display name. `unsaved.ts`: warning for work that is not saved.
+- `i18n.ts`: `I18nProvider`, `useT`. `time.ts`: relative time. `download.ts`: save a file. `config.ts`: build settings.
 
 Other:
 
-- `locales/en.ts`: all UI text.
+- `locales/en/` and `locales/es/`: all UI text, one file for each area, same keys in both.
+- `content/`: reference text from the published site (rights card, family plan, resource entries, links, hotline). Generated by script, pinned by checksum tests, English only. Do not edit by hand.
 - `e2e/smoke.mjs`: end-to-end test.
 - `docs/`: architecture, security, signaling, testing (with the review checklist).
 - `tasks/todo.md`: the plan and its status. `tasks/lessons.md`: rules from past corrections.
 
 ## Rules
 
-- No user-visible text in components. Add a key to `locales/en.ts` and use `useT()`.
+- No user-visible text in components. Add a key to a file in `locales/en/` and the same key in `locales/es/`, and use `useT()`.
 - UI text and docs use sentence case and simple, direct English.
-- A tool reads shared data only through `useRecords` with a guard and a key function from `schema.ts`.
+- A tool reads shared data only through `useRecords` with a guard and a key function.
+- Never store the passphrase or the group name of a room. Never write safety alerts to the device.
+- All encryption goes through `encryptBytes` in `crypto.ts`, which refuses a weak passphrase. Do not write a second encrypt path.
+- Storage names must start with `snj.` (keys), `snj-` (databases), or `snj-app-` (caches), so that the erase finds them and does not touch other sites.
 - Do not read-modify-write a field that two members can change at the same time. Use one record for each member and action (see positions and confirmations).
 - A setting that causes deletes must be a shared setting (`useSharedSetting`), changed only by an explicit save.
 - A record type with child records must delete them with the parent and must be in `purgeExpired`.

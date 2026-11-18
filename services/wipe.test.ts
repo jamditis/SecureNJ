@@ -27,11 +27,16 @@ describe('eraseDevice', () => {
     localStorage.setItem('snj.space', 'secret');
     localStorage.setItem('snj.member.snj-abc', 'id');
     localStorage.setItem('other-app.settings', 'keep me');
+    // Data that the published site stored before this app replaced it.
+    localStorage.setItem('securenj-resource-sheet', '{}');
+    localStorage.setItem(`securenj-room-${'ab'.repeat(32)}-status-name`, 'Sparrow');
+    localStorage.setItem('mutual-aid-settings', '{}');
     sessionStorage.setItem('snj.space', 'secret');
     sessionStorage.setItem('other-app.session', 'keep me');
     await createDatabase('snj-local');
     await createDatabase('snj-0123abcd');
     await createDatabase('other-app-db');
+    await createDatabase('ab'.repeat(32));
 
     const result = await eraseDevice(localStorage, sessionStorage);
 

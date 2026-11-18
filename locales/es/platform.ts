@@ -7,16 +7,11 @@ const platform: Record<keyof typeof en, string> = {
   'language.label': 'Idioma',
 
   'device.open': 'Datos en este dispositivo',
-  'device.title': 'Datos en este dispositivo',
   'device.backupTitle': 'Copia de seguridad',
-  'device.backupNote': 'Una copia de seguridad es un archivo cifrado con los datos compartidos que están abiertos ahora: {scope}. No incluye la cadena telefónica, que tiene su propia exportación.',
-  'device.scopeLocal': 'los datos de este dispositivo',
-  'device.scopeSpace': 'el espacio "{name}"',
   'device.backup': 'Guardar una copia de seguridad',
   'device.backupPassphraseNote': 'La copia se cifra con esta frase de contraseña. Usa una frase distinta a la del espacio y guárdala separada del archivo.',
   'device.backupSaved': 'Guardado: {name}',
   'device.restore': 'Restaurar una copia de seguridad',
-  'device.restorePassphraseNote': 'Escribe la frase de contraseña del archivo de copia. Los datos de la copia se agregan a {scope}. Un registro que se borró aquí después de hacer la copia sigue borrado.',
   'device.restored': 'La copia se agregó.',
   'device.notBackup': 'El archivo no es una copia de seguridad de un espacio.',
   'device.eraseTitle': 'Borrar este dispositivo',
@@ -34,9 +29,8 @@ const platform: Record<keyof typeof en, string> = {
   'invite.link': 'Enlace de invitación',
   'invite.copy': 'Copiar el enlace',
   'invite.qr': 'Código para la cámara de un celular',
-  'invite.received': 'Abriste una invitación al espacio "{name}". Revisa que los servidores de señalización sean de tu grupo. Luego escribe la frase de contraseña que te dio tu grupo.',
+  'invite.received': 'Abriste una invitación al grupo "{name}". Abre una herramienta de "Trabajar en grupo": el nombre del grupo y los servidores ya están escritos. Revisa que los servidores sean de tu grupo y luego escribe la frase de contraseña que te dio tu grupo.',
 
-  'offline.ready': 'Esta aplicación está guardada para usarla sin conexión.',
 };
 
 export default platform;

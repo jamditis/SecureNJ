@@ -11,6 +11,7 @@ import {
   ImageOff,
   LifeBuoy,
   ListChecks,
+  MessageSquareLock,
   Package,
   PenTool,
   Share2,
@@ -22,6 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { MessageKey } from './services/i18n';
+import { hasUnsavedWork } from './services/unsaved';
 import type { ToolId } from './types';
 
 export type SectionId = 'send' | 'ready' | 'document' | 'group';
@@ -67,7 +69,8 @@ export interface ToolInfo {
 }
 
 export const TOOLS: ToolInfo[] = [
-  { id: 'secure-share', section: 'send', title: 'share.title', description: 'share.summary', icon: FileLock, color: 'bg-indigo-500', scope: 'device' },
+  { id: 'secure-share', section: 'send', title: 'lock.messageTitle', description: 'lock.messageSummary', icon: MessageSquareLock, color: 'bg-indigo-500', scope: 'device' },
+  { id: 'lock-file', section: 'send', title: 'lock.fileTitle', description: 'lock.fileSummary', icon: FileLock, color: 'bg-purple-500', scope: 'device' },
   { id: 'event-creator', section: 'send', title: 'event.title', description: 'event.summary', icon: Calendar, color: 'bg-blue-500', scope: 'device' },
 
   { id: 'rights-card', section: 'ready', title: 'rights.title', description: 'rights.summary', icon: IdCard, color: 'bg-rose-500', scope: 'device' },
@@ -98,7 +101,11 @@ export function readRoute(hash: string): { page: ToolId; payload: string } {
   return ALL_IDS.has(id) ? { page: id as ToolId, payload: rest.join('/') } : { page: 'dashboard', payload: '' };
 }
 
-/** Opens a page. The change of the address makes the app show it. */
-export function goToPage(id: ToolId): void {
+/**
+ * Opens a page. The change of the address makes the app show it. If a tool
+ * holds work that is not saved, the person must agree first.
+ */
+export function goToPage(id: ToolId, confirmText: string): void {
+  if (hasUnsavedWork() && !window.confirm(confirmText)) return;
   window.location.hash = `#/${id}`;
 }

@@ -1,12 +1,15 @@
 /**
- * A space is the private area of one group. The group shares a name and a
- * passphrase. All room identifiers come from these two values, so a person
- * who does not have the passphrase cannot find the room or read its messages.
+ * A group shares a name and a passphrase. Each shared tool has its own room,
+ * and all room identifiers come from these two values, so a person who does
+ * not have the passphrase cannot find a room or read its messages.
+ *
+ * Nothing in this file stores the name or the passphrase.
  */
 import { KDF_ITERATIONS } from './crypto';
 import { normalizePassphrase } from './passphrase';
 
-export interface SpaceConfig {
+/** What a member types to open a room. None of it is stored. */
+export interface RoomRequest {
   name: string;
   passphrase: string;
   /** WebSocket addresses of the signaling servers that connect peers. */
@@ -21,8 +24,6 @@ export interface SpaceKeys {
 }
 
 const encoder = new TextEncoder();
-const STORAGE_KEY = 'snj.space';
-
 /** The space dialog and the invite link use the same limit. */
 export const MAX_SPACE_NAME_LENGTH = 100;
 
@@ -43,7 +44,12 @@ async function expand(master: CryptoKey, label: string, bytes: number): Promise<
   return new Uint8Array(bits);
 }
 
-export async function deriveSpaceKeys(name: string, passphrase: string): Promise<SpaceKeys> {
+/**
+ * The keys of the room of one tool. The tool is part of the salt, so the
+ * same group name and passphrase give a different room for each tool. A
+ * member who opens one tool does not open the others.
+ */
+export async function deriveRoomKeys(tool: string, name: string, passphrase: string): Promise<SpaceKeys> {
   const subtle = globalThis.crypto.subtle;
   const material = await subtle.importKey(
     'raw',
@@ -52,7 +58,7 @@ export async function deriveSpaceKeys(name: string, passphrase: string): Promise
     false,
     ['deriveBits'],
   );
-  const salt = encoder.encode(`securenj/space/v1/${normalizeSpaceName(name)}`);
+  const salt = encoder.encode(`securenj/room/v1/${tool}/${normalizeSpaceName(name)}`);
   const masterBits = await subtle.deriveBits({ name: 'PBKDF2', salt, iterations: KDF_ITERATIONS, hash: 'SHA-256' }, material, 256);
   const master = await subtle.importKey('raw', masterBits, 'HKDF', false, ['deriveBits']);
 
@@ -87,41 +93,4 @@ export function parseSignalingUrls(text: string, pageIsSecure = false): { urls: 
     else if (!urls.includes(entry)) urls.push(entry);
   }
   return { urls, invalid };
-}
-
-function isSpaceConfig(value: unknown): value is SpaceConfig {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.name === 'string' &&
-    typeof v.passphrase === 'string' &&
-    Array.isArray(v.signaling) &&
-    v.signaling.every((url) => typeof url === 'string')
-  );
-}
-
-/**
- * The saved space. Session storage is the default: the passphrase goes away
- * when the browser closes. Local storage is used only if the user asks.
- */
-export function loadSavedSpace(session: Storage, local: Storage): SpaceConfig | null {
-  for (const storage of [session, local]) {
-    try {
-      const parsed: unknown = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null');
-      if (isSpaceConfig(parsed)) return parsed;
-    } catch {
-      // Damaged storage is the same as no saved space.
-    }
-  }
-  return null;
-}
-
-export function saveSpace(config: SpaceConfig, remember: boolean, session: Storage, local: Storage): void {
-  clearSavedSpace(session, local);
-  (remember ? local : session).setItem(STORAGE_KEY, JSON.stringify(config));
-}
-
-export function clearSavedSpace(session: Storage, local: Storage): void {
-  session.removeItem(STORAGE_KEY);
-  local.removeItem(STORAGE_KEY);
 }

@@ -11,7 +11,9 @@
  *   than this computer,
  * - the browser reports an error (which includes a request that the content
  *   security policy blocks),
- * - "leave and delete" keeps the connection open or keeps data on the device,
+ * - two tools of one group share a room, or the passphrase is stored,
+ * - safety alerts are written to the device,
+ * - "clear from this browser" keeps the connection open or keeps data,
  * - the app does not open with no connection after the first visit,
  * - "erase all data" leaves a database, a stored value, a cached file, or a
  *   service worker in the browser,
@@ -32,7 +34,7 @@ import { build, preview } from 'vite';
 const APP_PORT = 4173;
 const SIGNALING_PORT = 4444;
 const SIGNALING_URL = `ws://127.0.0.1:${SIGNALING_PORT}`;
-const SPACE = { name: 'Smoke test', passphrase: 'correct horse battery staple smoke' };
+const GROUP = { name: 'Smoke test', passphrase: 'correct horse battery staple smoke' };
 
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', ''];
 
@@ -76,20 +78,29 @@ async function openMember(browser, appUrl, label) {
   return page;
 }
 
-async function joinSpace(page, passphrase) {
-  await page.getByRole('button', { name: 'Create or join a space' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Space name').fill(SPACE.name);
-  await dialog.locator('input[type=password]').fill(passphrase);
-  await dialog.getByLabel('Signaling servers').fill(SIGNALING_URL);
-  await dialog.getByRole('button', { name: 'Open the space' }).click();
-  await page.getByRole('heading', { name: /^Space: Smoke test/ }).waitFor();
-}
-
 async function openTool(page, name) {
-  await page.getByRole('navigation').getByRole('button', { name }).click();
+  await page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
   await page.getByRole('heading', { name, level: 2 }).waitFor();
 }
+
+/** Opens the room of one tool. Each tool has its own room, so each needs the passphrase. */
+async function openRoom(page, tool, passphrase = GROUP.passphrase) {
+  await openTool(page, tool);
+  const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Open room' }) });
+  if ((await form.getByLabel('Group name').inputValue()) === '') await form.getByLabel('Group name').fill(GROUP.name);
+  await form.locator('input[type=password]').fill(passphrase);
+  await form.getByLabel('Signaling servers').fill(SIGNALING_URL);
+  await form.getByRole('button', { name: 'Open room' }).click();
+  await page.getByRole('button', { name: 'Room settings' }).waitFor({ timeout: 30_000 });
+}
+
+async function workOnThisDevice(page, tool) {
+  await openTool(page, tool);
+  await page.getByRole('button', { name: 'Use on this device only, with no room' }).click();
+}
+
+const spaceDatabases = (page) =>
+  page.evaluate(async () => (await indexedDB.databases()).map((db) => db.name).filter((name) => !['snj-local', 'snj-private'].includes(name)));
 
 async function main() {
   const signaling = spawn(process.execPath, ['node_modules/y-webrtc/bin/server.js'], {
@@ -107,36 +118,44 @@ async function main() {
   const browser = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns'] });
 
   try {
-    console.log('1. Local mode: data stays on the device and survives a reload');
+    console.log('1. With no room: a tool saves data on the device, but safety alerts are never saved');
     const solo = await openMember(browser, appUrl, 'solo');
-    await openTool(solo, 'Safety alerts');
+    await workOnThisDevice(solo, 'Mutual aid board');
+    await solo.getByRole('button', { name: 'New post' }).click();
+    await solo.getByLabel('Title').fill('Local only post');
+    await solo.getByRole('button', { name: 'Save' }).click();
+    await solo.getByText('Local only post').waitFor();
+    await workOnThisDevice(solo, 'Safety alerts');
     await solo.getByRole('button', { name: 'Report activity' }).click();
     await solo.getByLabel('Location').fill('Local only street');
     await solo.getByRole('button', { name: 'Send the report' }).click();
     await solo.getByText('Local only street').waitFor();
     await solo.reload();
-    await openTool(solo, 'Safety alerts');
-    await solo.getByText('Local only street').waitFor();
+    await solo.getByRole('button', { name: 'Use on this device only, with no room' }).click();
+    await solo.getByText('No reports').waitFor();
+    await workOnThisDevice(solo, 'Mutual aid board');
+    await solo.getByText('Local only post').waitFor();
+
+    assert.equal(await solo.evaluate(() => document.querySelector('main').spellcheck), false, 'spell check must be off, as the page about limits says');
 
     console.log('1b. The app opens with no connection after the first visit');
     await solo.evaluate(() => navigator.serviceWorker.ready);
     await solo.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await solo.context().setOffline(true);
     await solo.reload();
-    await openTool(solo, 'Safety alerts');
-    await solo.getByText('Local only street').waitFor();
+    await solo.getByRole('button', { name: 'Use on this device only, with no room' }).click();
+    await solo.getByText('Local only post').waitFor();
     await solo.context().setOffline(false);
 
     console.log('1c. The language switch changes the text and is saved');
     await solo.getByLabel('Language').selectOption('es');
-    await solo.getByRole('heading', { name: 'Alertas de seguridad', level: 2 }).waitFor();
+    await solo.getByRole('heading', { name: 'Tablero de ayuda mutua', level: 2 }).waitFor();
     assert.equal(await solo.evaluate(() => document.documentElement.lang), 'es');
     await solo.reload();
-    await solo.getByRole('navigation').getByRole('button', { name: 'Alertas de seguridad' }).waitFor();
     // The address keeps the page, so a reload opens the same tool.
-    await solo.getByRole('heading', { name: 'Alertas de seguridad', level: 2 }).waitFor();
+    await solo.getByRole('heading', { name: 'Tablero de ayuda mutua', level: 2 }).waitFor();
     await solo.getByLabel('Idioma').selectOption('en');
-    await solo.getByRole('heading', { name: 'Safety alerts', level: 2 }).waitFor();
+    await solo.getByRole('heading', { name: 'Mutual aid board', level: 2 }).waitFor();
 
     console.log('1d. "Erase all data" removes the data, the offline copy, and the service worker');
     // A different site on the same web origin has its own data. The erase must not touch it.
@@ -167,21 +186,17 @@ async function main() {
       'erase must remove all data of this app and no data of a different site',
     );
 
-    console.log('2. Two members join one space and sync over WebRTC');
+    console.log('2. Two members open the room of one tool and sync over WebRTC');
     const ana = await openMember(browser, appUrl, 'ana');
     const ben = await openMember(browser, appUrl, 'ben');
-    await joinSpace(ana, SPACE.passphrase);
-    await joinSpace(ben, SPACE.passphrase);
-    await ana.getByRole('heading', { name: /peers: 1/ }).waitFor({ timeout: 30_000 });
-
-    await openTool(ana, 'Safety alerts');
-    await openTool(ben, 'Safety alerts');
+    await openRoom(ana, 'Safety alerts');
+    await openRoom(ben, 'Safety alerts');
+    await ana.getByText('Smoke test · peers: 1').waitFor({ timeout: 30_000 });
     await ana.getByRole('button', { name: 'Report activity' }).click();
     await ana.getByLabel('Location').fill('Broad St and Market St');
     await ana.getByLabel('Activity', { exact: true }).fill('Two vehicles stop cars');
     await ana.getByRole('button', { name: 'Send the report' }).click();
     await ben.getByText('Broad St and Market St').waitFor({ timeout: 15_000 });
-    assert.equal(await ben.getByText('Local only street').count(), 0, 'local data must not go into the space');
 
     for (const page of [ana, ben]) {
       const seen = await page.evaluate(() => window.iceServersSeen);
@@ -189,29 +204,41 @@ async function main() {
       assert.deepEqual(seen.filter((servers) => servers.length !== 0), [], 'a build with no STUN server must contact no STUN server');
     }
 
+    console.log('2b. The passphrase and the group name are not stored, and safety alerts are not written to the device');
+    const stored = await ana.evaluate(async () => ({
+      text: JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }),
+      databases: (await indexedDB.databases()).map((db) => db.name),
+    }));
+    assert.ok(!stored.text.includes('horse') && !stored.text.includes(GROUP.name), 'the passphrase and the group name must not be stored');
+    assert.deepEqual(stored.databases.sort(), ['snj-local', 'snj-private'], 'the room of safety alerts must have no database');
+
     console.log('3. A confirmation from the second member reaches the reporter');
     await ana.getByText('Not confirmed: one report only').waitFor();
     assert.ok(await ana.getByRole('button', { name: 'I see it too' }).isDisabled(), 'a reporter cannot confirm their own report');
     await ben.getByRole('button', { name: 'I see it too' }).click();
     await ana.getByText('Confirmed by other members: 1').waitFor({ timeout: 15_000 });
 
-    console.log('4. A member with the wrong passphrase gets a different, empty space');
+    console.log('4. A member with the wrong passphrase gets a different, empty room');
     const eve = await openMember(browser, appUrl, 'eve');
-    await joinSpace(eve, 'a wrong set of words for this space');
-    await openTool(eve, 'Safety alerts');
+    await openRoom(eve, 'Safety alerts', 'a wrong set of words for this group');
     await eve.waitForTimeout(5_000);
     assert.equal(await eve.getByText('Broad St and Market St').count(), 0, 'a wrong passphrase must not show the data');
     await eve.getByText('No reports').waitFor();
 
-    console.log('5. The whiteboard syncs a line');
+    console.log('5. A second tool needs its own room, and it syncs there');
     await openTool(ana, 'Whiteboard');
-    await openTool(ben, 'Whiteboard');
+    await ana.getByRole('button', { name: 'Open room' }).waitFor();
+    assert.equal(await ana.getByLabel('Drawing surface').count(), 0, 'an open room of one tool must not open a different tool');
+    await openRoom(ana, 'Whiteboard');
+    await openRoom(ben, 'Whiteboard');
+    await ana.getByLabel('Drawing surface').scrollIntoViewIfNeeded();
     const box = await ana.getByLabel('Drawing surface').boundingBox();
     await ana.mouse.move(box.x + 50, box.y + 50);
     await ana.mouse.down();
     await ana.mouse.move(box.x + 200, box.y + 120, { steps: 10 });
     await ana.mouse.up();
     await ben.getByRole('button', { name: 'Clear the board' }).and(ben.locator(':enabled')).waitFor({ timeout: 15_000 });
+    assert.equal((await spaceDatabases(ana)).length, 1, 'the whiteboard room has one database, and the alerts room has none');
 
     console.log('6. The exported event page opens with no network and decrypts');
     await openTool(ana, 'Event coordinator');
@@ -239,47 +266,58 @@ async function main() {
     await viewer.getByRole('button', { name: 'Unlock' }).click();
     await viewer.getByRole('heading', { name: 'Know your rights night' }).waitFor({ timeout: 15_000 });
 
-    console.log('6b. An invite link fills in the space, and the new member needs only the passphrase');
-    await ben.getByRole('navigation').getByRole('button', { name: /Smoke test/ }).click();
+    console.log('6b. An invite link fills in the group, and the new member needs only the passphrase');
+    await openTool(ben, 'Safety alerts');
+    await ben.getByRole('button', { name: 'Room settings' }).click();
     const inviteLink = await ben.getByLabel('Invite link').inputValue();
-    assert.ok(!inviteLink.includes(encodeURIComponent(SPACE.passphrase)) && !inviteLink.includes('horse'), 'the invite must not hold the passphrase');
+    assert.ok(!inviteLink.includes('horse'), 'the invite must not hold the passphrase');
     await ben.getByRole('img', { name: 'Code for the camera of a phone' }).waitFor();
     await ben.getByRole('button', { name: 'Close' }).click();
     const cy = await openMember(browser, inviteLink, 'cy');
-    const inviteDialog = cy.getByRole('dialog');
-    assert.equal(await inviteDialog.getByLabel('Space name').inputValue(), SPACE.name);
-    assert.equal(await inviteDialog.getByLabel('Signaling servers').inputValue(), SIGNALING_URL);
     assert.ok(!cy.url().includes('join='), 'the invite must be removed from the address');
-    await inviteDialog.locator('input[type=password]').fill(SPACE.passphrase);
-    await inviteDialog.getByRole('button', { name: 'Open the space' }).click();
     await openTool(cy, 'Safety alerts');
+    const inviteForm = cy.locator('form').filter({ has: cy.getByRole('button', { name: 'Open room' }) });
+    assert.equal(await inviteForm.getByLabel('Group name').inputValue(), GROUP.name);
+    assert.equal(await inviteForm.getByLabel('Signaling servers').inputValue(), SIGNALING_URL);
+    await inviteForm.locator('input[type=password]').fill(GROUP.passphrase);
+    await inviteForm.getByRole('button', { name: 'Open room' }).click();
     await cy.getByText('Broad St and Market St').waitFor({ timeout: 30_000 });
 
-    console.log('7. Leave and delete: the connection closes and the device keeps no data of the space');
-    assert.ok(sockets.get(ana).some((socket) => socket.open), 'a member of a space has a connection to the signaling server');
-    await ana.getByRole('navigation').getByRole('button', { name: /Smoke test/ }).click();
-    await ana.getByRole('button', { name: 'Leave the space' }).click();
-    await ana.getByRole('navigation').getByText('This device only').waitFor();
+    console.log('7. A saved room comes back after a reload with the passphrase, and "clear" removes it');
+    await openRoom(ana, 'Mutual aid board');
+    await ana.getByRole('button', { name: 'New post' }).click();
+    await ana.getByLabel('Title').fill('Ride to the clinic');
+    await ana.getByRole('button', { name: 'Save' }).click();
+    await ana.getByText('Ride to the clinic').waitFor();
+    // The browser database writes after the change.
+    await ana.waitForTimeout(500);
+    await ana.reload();
+    // The reload closed the old connections. Count only the connections of the new page.
+    sockets.set(ana, []);
+    await ana.getByRole('button', { name: 'Open room' }).waitFor();
+    assert.equal(await ana.getByText('Ride to the clinic').count(), 0, 'after a reload the room is closed until the member types the passphrase');
+    await openRoom(ana, 'Mutual aid board');
+    await ana.getByText('Ride to the clinic').waitFor();
+    assert.ok(sockets.get(ana).some((socket) => socket.open), 'a member of a room has a connection to the signaling server');
+
+    ana.once('dialog', (dialog) => dialog.accept());
+    await ana.getByRole('button', { name: 'Room settings' }).click();
+    await ana.getByRole('button', { name: 'Clear from this browser' }).click();
+    await ana.getByRole('button', { name: 'Open room' }).waitFor();
     const deadline = Date.now() + 10_000;
     while (sockets.get(ana).some((socket) => socket.open)) {
-      assert.ok(Date.now() < deadline, 'the signaling connection is open after the member left');
+      assert.ok(Date.now() < deadline, 'the signaling connection is open after the member left the last room');
       await ana.waitForTimeout(200);
     }
     const left = await ana.evaluate(async () => ({
       databases: (await indexedDB.databases()).map((db) => db.name),
-      local: Object.keys(localStorage),
-      session: Object.keys(sessionStorage),
+      memberKeys: Object.keys(localStorage).filter((key) => key.startsWith('snj.member.snj-') && key !== 'snj.member.snj-local'),
+      registry: localStorage.getItem('snj.databases'),
     }));
-    assert.deepEqual(left.databases.filter((name) => !['snj-local', 'snj-private'].includes(name)), [], 'the space database must be deleted');
-    assert.deepEqual(
-      left.local.filter((key) => key !== 'snj.member.snj-local'),
-      ['snj.databases'],
-      'the member ID and the name of the space must be deleted',
-    );
-    assert.equal(await ana.evaluate(() => localStorage.getItem('snj.databases')), '[]', 'the list of space databases must be empty');
-    assert.deepEqual(left.session, [], 'the passphrase must be deleted');
-    // Ben is still connected to Cy only.
-    await ben.getByRole('navigation').getByText('Connected peers: 1').waitFor({ timeout: 40_000 });
+    // The whiteboard room was open before the reload. Its database stays: the member did not clear it.
+    assert.equal(left.databases.filter((name) => !['snj-local', 'snj-private'].includes(name)).length, 1, 'the database of the cleared room must be deleted');
+    assert.equal(left.memberKeys.length, 1, 'the member ID of the cleared room must be deleted');
+    assert.equal(JSON.parse(left.registry).length, 1, 'the cleared room must be removed from the list of databases');
 
     assert.deepEqual(problems, [], 'the browser reported problems');
     console.log('Smoke test passed.');

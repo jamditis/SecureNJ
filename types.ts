@@ -4,6 +4,7 @@ export type ToolId =
   | 'limits'
   | 'resources'
   | 'share'
+  | 'lock-file'
   | 'rights-card'
   | 'family-plan'
   | 'witness-notes'

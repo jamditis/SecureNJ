@@ -10,6 +10,13 @@
  * because that step cannot fail and cannot wait.
  */
 const KEY_PREFIX = 'snj.';
+/**
+ * The published site before this app stored data under these names, on the
+ * same origin. An erase must remove that data too.
+ */
+const OLD_SITE_KEYS = /^(securenj-|mutual-aid-settings$)/;
+/** The old site named each room database with 64 hex characters. */
+const OLD_SITE_DATABASE = /^[0-9a-f]{64}$/;
 const DATABASE_PREFIX = 'snj-';
 const CACHE_PREFIX = 'snj-app-';
 const KNOWN_DATABASES = ['snj-local', 'snj-private'];
@@ -40,7 +47,7 @@ export function forgetDatabase(storage: Storage, name: string): void {
 
 function clearOwnKeys(storage: Storage): void {
   Object.keys(storage)
-    .filter((key) => key.startsWith(KEY_PREFIX))
+    .filter((key) => key.startsWith(KEY_PREFIX) || OLD_SITE_KEYS.test(key))
     .forEach((key) => storage.removeItem(key));
 }
 
@@ -58,7 +65,7 @@ async function ownDatabases(registered: string[]): Promise<string[]> {
   const names = new Set([...KNOWN_DATABASES, ...registered]);
   if (typeof indexedDB.databases === 'function') {
     for (const { name } of await indexedDB.databases()) {
-      if (name?.startsWith(DATABASE_PREFIX)) names.add(name);
+      if (name && (name.startsWith(DATABASE_PREFIX) || OLD_SITE_DATABASE.test(name))) names.add(name);
     }
   }
   return Array.from(names);

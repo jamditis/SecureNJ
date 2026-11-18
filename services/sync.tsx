@@ -1,12 +1,16 @@
 /**
- * The data layer. One Yjs document holds the data of the active space.
+ * The data layer.
  *
- * - No space: the document is saved in this browser only. No network.
- * - In a space: the document also syncs to peers over WebRTC. The room ID
- *   and the room password come from the passphrase (see `space.ts`).
+ * Each shared tool has its own Yjs document:
+ * - In a room: the document of that tool syncs to peers over WebRTC. The room
+ *   ID and the room password come from the group name, the passphrase, and
+ *   the tool (see `space.ts`). The passphrase is used one time to derive the
+ *   keys. It is never stored and is not kept in memory.
+ * - With no room: the tool uses the local document. No network.
  *
- * A second, private document holds data that must not leave the device
- * (the phone tree). It never syncs.
+ * Safety alerts are never written to this device, with or without a room.
+ * A private document holds data that must not leave the device (the phone
+ * tree). It never syncs.
  */
 import {
   createContext,
@@ -14,6 +18,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -24,24 +29,22 @@ import { WebrtcProvider } from 'y-webrtc';
 import { Awareness } from 'y-protocols/awareness';
 import { ICE_SERVER_URLS } from './config';
 import { useT } from './i18n';
-import { eraseDevice, forgetDatabase, rememberDatabase } from './wipe';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
+import { passphraseProblem } from './passphrase';
 import { purgeExpired } from './retention';
-import {
-  clearSavedSpace,
-  deriveSpaceKeys,
-  loadSavedSpace,
-  saveSpace,
-  type SpaceConfig,
-  type SpaceKeys,
-} from './space';
+import { deriveRoomKeys, type RoomRequest, type SpaceKeys } from './space';
+import { eraseDevice, forgetDatabase, rememberDatabase } from './wipe';
 
 const LOCAL_DB = 'snj-local';
 const PRIVATE_DB = 'snj-private';
 const SWEEP_INTERVAL_MS = 30_000;
 const DATABASE_TIMEOUT_MS = 10_000;
 const DELETE_TIMEOUT_MS = 3_000;
-/** Tabs of one browser use this channel to leave a space or to erase the device together. */
+
+/** The data of these tools is never written to this device. */
+export const MEMORY_ONLY_TOOLS: ReadonlySet<string> = new Set(['safety-alerts']);
+
+/** Tabs of one browser use this channel to leave a room or to erase the device together. */
 const TAB_CHANNEL = 'snj-tabs';
 type TabMessage = { type: 'leave'; dbName: string } | { type: 'erase' };
 
@@ -55,38 +58,31 @@ function tellOtherTabs(message: TabMessage): void {
 /** `none`: no server is set. `connecting`: no server answers. */
 export type SignalingState = 'none' | 'connecting' | 'connected';
 
+/** What one tool gets: its own document and the state of its room. */
 export interface SyncValue {
-  /** The data of the active space, or the local data if there is no space. */
+  /** The data of the room of this tool, or the local data if the tool has no room. */
   doc: Y.Doc;
   /** Data that never leaves this device. */
   privateDoc: Y.Doc;
   awareness: Awareness;
-  /** The ID of this device in the active space. A different space gives a different ID. */
+  /** The ID of this device in this room. A different room gives a different ID. */
   memberId: string;
   memberName: string;
   setMemberName: (name: string) => void;
+  /** The room of this tool, or null when the tool works on this device only. */
   space: { name: string; signaling: string[] } | null;
   /** Connected peers, which includes other tabs of this browser. */
   peers: number;
   signaling: SignalingState;
-  /** True after a space did not open. The app is then in local mode. */
-  spaceFailed: boolean;
-  join: (config: SpaceConfig, remember: boolean) => void;
-  /** Resolves to false if the delete of the local copy is not complete yet. */
-  leave: (deleteLocalCopy: boolean) => Promise<boolean>;
-  /** Deletes all data of the app from this browser, in all tabs. */
-  erase: () => Promise<void>;
 }
 
 export const SyncContext = createContext<SyncValue | null>(null);
 
 export function useSync(): SyncValue {
   const value = useContext(SyncContext);
-  if (!value) throw new Error('useSync must be used inside SyncProvider');
+  if (!value) throw new Error('useSync must be used inside ToolScope');
   return value;
 }
-
-export const databaseName = (keys: SpaceKeys | null) => (keys ? keys.roomId : LOCAL_DB);
 
 interface SignalingConnection {
   connected: boolean;
@@ -114,11 +110,12 @@ function watchSignaling(network: WebrtcProvider, onChange: (state: SignalingStat
 }
 
 /**
- * Keeps the browser database small and free of deleted text. The database
- * is a log of changes: without this, the text of a deleted record stays in
- * the log. `purge` also deletes expired records of the space.
+ * Deletes expired records, and keeps the browser database free of deleted
+ * text. The database is a log of changes: without the rewrite, the text of
+ * a deleted record stays in the log. A document with no database only gets
+ * the delete of expired records.
  */
-function startHousekeeping(doc: Y.Doc, persistence: IndexeddbPersistence, purge: boolean) {
+function startHousekeeping(doc: Y.Doc, persistence: IndexeddbPersistence | null, purge: boolean) {
   let dirty = false;
   const markDirty = () => {
     dirty = true;
@@ -126,7 +123,7 @@ function startHousekeeping(doc: Y.Doc, persistence: IndexeddbPersistence, purge:
   doc.on('update', markDirty);
   const compact = async () => {
     dirty = false;
-    await storeState(persistence, true);
+    if (persistence) await storeState(persistence, true);
   };
   const sweep = () => {
     if (purge) purgeExpired(doc, Date.now());
@@ -134,7 +131,7 @@ function startHousekeeping(doc: Y.Doc, persistence: IndexeddbPersistence, purge:
     if (dirty) compact().catch(() => {});
   };
   const timer = setInterval(sweep, SWEEP_INTERVAL_MS);
-  void persistence.whenSynced.then(sweep);
+  if (persistence) void persistence.whenSynced.then(sweep);
   return {
     compact,
     stop: () => {
@@ -160,18 +157,26 @@ function deleteDatabase(name: string): Promise<void> {
 }
 
 interface SessionOptions {
+  /** Null for a document with no room. */
   keys: SpaceKeys | null;
   signaling: string[];
   memberId: string;
-  onPeers: (count: number) => void;
-  onSignaling: (state: SignalingState) => void;
+  /** False for data that must never be written to this device. */
+  persist: boolean;
+  /** The database name of a document with no room. */
+  localName?: string;
+  /** False for the private document, which has no shared records to expire. */
+  purge?: boolean;
+  onPeers?: (count: number) => void;
+  onSignaling?: (state: SignalingState) => void;
 }
 
 export interface Session {
   doc: Y.Doc;
   awareness: Awareness;
   memberId: string;
-  dbName: string;
+  /** The name of the browser database, or null when the document is in memory only. */
+  dbName: string | null;
   /** Resolves when the saved data is loaded from the browser database. */
   ready: Promise<unknown>;
   /** Rewrites the browser database so that it holds the current data only. */
@@ -179,13 +184,14 @@ export interface Session {
   close: () => void;
 }
 
-export function openSession({ keys, signaling, memberId, onPeers, onSignaling }: SessionOptions): Session {
-  const dbName = databaseName(keys);
+export function openSession(options: SessionOptions): Session {
+  const { keys, signaling, memberId, persist, localName = LOCAL_DB, purge = true, onPeers = () => {}, onSignaling = () => {} } = options;
+  const dbName = persist ? (keys ? keys.roomId : localName) : null;
   const doc = new Y.Doc();
   const awareness = new Awareness(doc);
   awareness.setLocalStateField('member', memberId);
-  const persistence = new IndexeddbPersistence(dbName, doc);
-  const housekeeping = startHousekeeping(doc, persistence, true);
+  const persistence = dbName ? new IndexeddbPersistence(dbName, doc) : null;
+  const housekeeping = startHousekeeping(doc, persistence, purge);
 
   let network: WebrtcProvider | null = null;
   let stopSignalingWatch = () => {};
@@ -198,7 +204,7 @@ export function openSession({ keys, signaling, memberId, onPeers, onSignaling }:
     // destroy() alone leaves the connection to the signaling server open.
     network?.disconnect();
     network?.destroy();
-    void persistence.destroy();
+    void persistence?.destroy();
     awareness.destroy();
     doc.destroy();
   };
@@ -220,119 +226,157 @@ export function openSession({ keys, signaling, memberId, onPeers, onSignaling }:
     stopSignalingWatch = watchSignaling(network, onSignaling);
   }
 
-  return { doc, awareness, memberId, dbName, ready: persistence.whenSynced, compact: housekeeping.compact, close };
+  return {
+    doc,
+    awareness,
+    memberId,
+    dbName,
+    ready: persistence ? persistence.whenSynced : Promise.resolve(),
+    compact: housekeeping.compact,
+    close,
+  };
+}
+
+/** An open room of one tool. */
+export interface OpenRoom {
+  session: Session;
+  name: string;
+  signaling: string[];
+  peers: number;
+  signalingState: SignalingState;
+}
+
+/** The documents that are always open. */
+interface BaseSessions {
+  local: Session;
+  /** Local data of the tools in `MEMORY_ONLY_TOOLS`. It is gone after a reload. */
+  localMemory: Session;
+  private: Session;
+}
+
+export interface RoomsValue {
+  /** The open rooms, by tool. */
+  rooms: Readonly<Record<string, OpenRoom>>;
+  /** The tools that the member uses on this device only, in this tab. */
+  localTools: ReadonlySet<string>;
+  /**
+   * The group name and the servers of the last room or of an invite. They
+   * fill the form of the next room. They are in memory only.
+   */
+  lastRoom: { name: string; signaling: string[] } | null;
+  setLastRoom: (room: { name: string; signaling: string[] } | null) => void;
+  /** Rejects if the room cannot open. The passphrase is not kept after this call. */
+  openRoom: (tool: string, request: RoomRequest) => Promise<void>;
+  /** Resolves to false if the delete of the local copy is not complete yet. */
+  closeRoom: (tool: string, deleteLocalCopy: boolean) => Promise<boolean>;
+  setLocalOnly: (tool: string, localOnly: boolean) => void;
+  /** Deletes all data of the app from this browser, in all tabs. */
+  erase: () => Promise<void>;
+}
+
+const RoomsContext = createContext<(RoomsValue & { base: BaseSessions; memberName: string; setMemberName: (name: string) => void }) | null>(null);
+
+export function useRooms(): RoomsValue {
+  const value = useContext(RoomsContext);
+  if (!value) throw new Error('useRooms must be used inside SyncProvider');
+  return value;
 }
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const t = useT();
-  const [config, setConfig] = useState<SpaceConfig | null>(() => loadSavedSpace(sessionStorage, localStorage));
-  const [session, setSession] = useState<Session | null>(null);
-  const [privateSession, setPrivateSession] = useState<{ doc: Y.Doc; close: () => void } | null>(null);
-  const [peers, setPeers] = useState(0);
-  const [signaling, setSignaling] = useState<SignalingState>('none');
+  const [base, setBase] = useState<BaseSessions | null>(null);
+  const [rooms, setRooms] = useState<Record<string, OpenRoom>>({});
+  const [localTools, setLocalTools] = useState<ReadonlySet<string>>(new Set());
+  const [lastRoom, setLastRoom] = useState<{ name: string; signaling: string[] } | null>(null);
   const [failed, setFailed] = useState(false);
-  const [spaceFailed, setSpaceFailed] = useState(false);
   const [memberName, setMemberNameState] = useState(() => loadMemberName(localStorage));
   /** Set when this browser was erased. `complete` is false while a delete waits for a different tab. */
   const [erased, setErased] = useState<{ complete: boolean; here: boolean } | null>(null);
+  // The cleanup at unmount needs the rooms that are open at that time.
+  const roomsRef = useRef(rooms);
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
 
   useEffect(() => {
-    const doc = new Y.Doc();
-    const persistence = new IndexeddbPersistence(PRIVATE_DB, doc);
-    const housekeeping = startHousekeeping(doc, persistence, false);
+    const memberId = getMemberId(localStorage, LOCAL_DB);
+    const sessions: BaseSessions = {
+      local: openSession({ keys: null, signaling: [], memberId, persist: true }),
+      localMemory: openSession({ keys: null, signaling: [], memberId, persist: false }),
+      private: openSession({ keys: null, signaling: [], memberId, persist: true, localName: PRIVATE_DB, purge: false }),
+    };
     let closed = false;
     const close = () => {
-      if (closed) return;
       closed = true;
-      housekeeping.stop();
-      void persistence.destroy();
-      doc.destroy();
+      Object.values(sessions).forEach((session) => session.close());
+      Object.values(roomsRef.current).forEach((room) => room.session.close());
     };
     // The database never reports that it is not available, so use a time limit.
-    withTimeout(persistence.whenSynced, DATABASE_TIMEOUT_MS).then(
-      () => !closed && setPrivateSession({ doc, close }),
+    withTimeout(Promise.all([sessions.local.ready, sessions.private.ready]), DATABASE_TIMEOUT_MS).then(
+      () => !closed && setBase(sessions),
       () => !closed && setFailed(true),
     );
     return close;
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    let opened: Session | null = null;
-    const open = async () => {
-      // Key derivation is slow by design. It runs before any network use.
-      const keys = config ? await deriveSpaceKeys(config.name, config.passphrase) : null;
-      if (cancelled) return;
-      if (keys) rememberDatabase(localStorage, keys.roomId);
-      opened = openSession({
-        keys,
-        signaling: config?.signaling ?? [],
-        memberId: getMemberId(localStorage, databaseName(keys)),
-        onPeers: setPeers,
-        onSignaling: setSignaling,
-      });
-      await withTimeout(opened.ready, DATABASE_TIMEOUT_MS);
-      if (!cancelled) setSession(opened);
-    };
-    open().catch(() => {
-      if (cancelled) return;
-      if (config) {
-        // Do not keep a space that cannot open: the app would fail at each start.
-        clearSavedSpace(sessionStorage, localStorage);
-        setSpaceFailed(true);
-        setConfig(null);
-      } else {
-        setFailed(true);
-      }
+  const removeRoom = useCallback((tool: string) => {
+    setRooms((current) => {
+      const { [tool]: _removed, ...rest } = current;
+      return rest;
     });
-    return () => {
-      cancelled = true;
-      opened?.close();
-      setSession(null);
-      setPeers(0);
-      setSignaling('none');
-    };
-  }, [config]);
-
-  // When one tab leaves a space or erases the device, the other tabs of this
-  // browser do the same. An open tab would keep the connection and would
-  // block the delete of the database.
-  useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined' || !session || !privateSession) return;
-    const channel = new BroadcastChannel(TAB_CHANNEL);
-    channel.onmessage = (event: MessageEvent<TabMessage>) => {
-      if (event.data.type === 'leave' && event.data.dbName === session.dbName) {
-        clearSavedSpace(sessionStorage, localStorage);
-        setConfig(null);
-      }
-      if (event.data.type === 'erase') {
-        session.close();
-        privateSession.close();
-        sessionStorage.clear();
-        setErased({ complete: true, here: false });
-      }
-    };
-    return () => channel.close();
-  }, [session, privateSession]);
-
-  const join = useCallback((next: SpaceConfig, remember: boolean) => {
-    saveSpace(next, remember, sessionStorage, localStorage);
-    setSpaceFailed(false);
-    setConfig(next);
   }, []);
 
-  const leave = useCallback(
-    async (deleteLocalCopy: boolean) => {
-      if (!session || !config) return true;
-      const { dbName } = session;
-      clearSavedSpace(sessionStorage, localStorage);
-      tellOtherTabs({ type: 'leave', dbName });
-      session.close();
-      setConfig(null);
-      if (!deleteLocalCopy) return true;
+  const openRoom = useCallback(
+    async (tool: string, request: RoomRequest) => {
+      if (passphraseProblem(request.passphrase)) throw new Error('weak passphrase');
+      // Key derivation is slow by design. It runs before any network use.
+      const keys = await deriveRoomKeys(tool, request.name, request.passphrase);
+      const persist = !MEMORY_ONLY_TOOLS.has(tool);
+      // A room that is not saved leaves no trace on the device, so its member ID is not saved.
+      const memberId = persist ? getMemberId(localStorage, keys.roomId) : crypto.randomUUID();
+      if (persist) rememberDatabase(localStorage, keys.roomId);
+
+      const live = { peers: 0, signalingState: 'none' as SignalingState };
+      const update = (patch: Partial<typeof live>) => {
+        Object.assign(live, patch);
+        setRooms((current) => (current[tool]?.session === session ? { ...current, [tool]: { ...current[tool], ...patch } } : current));
+      };
+      const session: Session = openSession({
+        keys,
+        signaling: request.signaling,
+        memberId,
+        persist,
+        onPeers: (peers) => update({ peers }),
+        onSignaling: (signalingState) => update({ signalingState }),
+      });
+      try {
+        await withTimeout(session.ready, DATABASE_TIMEOUT_MS);
+      } catch (error) {
+        session.close();
+        throw error;
+      }
+      setRooms((current) => {
+        // A second open for the same tool replaces the first room.
+        if (current[tool]?.session !== session) current[tool]?.session.close();
+        return { ...current, [tool]: { session, name: request.name.trim(), signaling: request.signaling, ...live } };
+      });
+      setLocalTools((current) => new Set([...current].filter((id) => id !== tool)));
+      setLastRoom({ name: request.name.trim(), signaling: request.signaling });
+    },
+    [],
+  );
+
+  const closeRoom = useCallback(
+    async (tool: string, deleteLocalCopy: boolean) => {
+      const room = rooms[tool];
+      if (!room) return true;
+      const { dbName } = room.session;
+      if (dbName) tellOtherTabs({ type: 'leave', dbName });
+      room.session.close();
+      removeRoom(tool);
+      if (!deleteLocalCopy || !dbName) return true;
       forgetMember(localStorage, dbName);
       forgetDatabase(localStorage, dbName);
-      setMemberNameState('');
       // The browser waits until all tabs close the database. Do not wait
       // without limit: the delete completes later if a tab is slow.
       return withTimeout(deleteDatabase(dbName), DELETE_TIMEOUT_MS).then(
@@ -340,44 +384,65 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         () => false,
       );
     },
-    [session, config],
+    [rooms, removeRoom],
   );
+
+  const closeAll = useCallback(() => {
+    Object.values(rooms).forEach((room) => room.session.close());
+    setRooms({});
+    if (base) Object.values(base).forEach((session) => session.close());
+    setBase(null);
+  }, [rooms, base]);
+
+  // When one tab leaves a room or erases the device, the other tabs of this
+  // browser do the same. An open tab would keep the connection and would
+  // block the delete of the database.
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel(TAB_CHANNEL);
+    channel.onmessage = (event: MessageEvent<TabMessage>) => {
+      const message = event.data;
+      if (message.type === 'leave') {
+        for (const [tool, room] of Object.entries(rooms)) {
+          if (room.session.dbName === message.dbName) {
+            room.session.close();
+            removeRoom(tool);
+          }
+        }
+      }
+      if (message.type === 'erase') {
+        closeAll();
+        setErased({ complete: true, here: false });
+      }
+    };
+    return () => channel.close();
+  }, [rooms, removeRoom, closeAll]);
 
   const erase = useCallback(async () => {
     tellOtherTabs({ type: 'erase' });
-    // An open database blocks its delete, so close both documents first.
-    session?.close();
-    privateSession?.close();
-    setSession(null);
+    // An open database blocks its delete, so close all documents first.
+    closeAll();
     const result = await eraseDevice();
     setErased({ complete: result.complete, here: true });
-  }, [session, privateSession]);
+  }, [closeAll]);
+
+  const setLocalOnly = useCallback((tool: string, localOnly: boolean) => {
+    setLocalTools((current) => {
+      const next = new Set(current);
+      if (localOnly) next.add(tool);
+      else next.delete(tool);
+      return next;
+    });
+  }, []);
 
   const setMemberName = useCallback((name: string) => {
     saveMemberName(localStorage, name);
     setMemberNameState(name.trim());
   }, []);
 
-  const value = useMemo<SyncValue | null>(
-    () =>
-      session && privateSession
-        ? {
-            doc: session.doc,
-            privateDoc: privateSession.doc,
-            awareness: session.awareness,
-            memberId: session.memberId,
-            memberName,
-            setMemberName,
-            space: config ? { name: config.name, signaling: config.signaling } : null,
-            peers,
-            signaling,
-            spaceFailed,
-            join,
-            leave,
-            erase,
-          }
-        : null,
-    [session, privateSession, memberName, setMemberName, config, peers, signaling, spaceFailed, join, leave, erase],
+  const value = useMemo(
+    () => (base ? { base, rooms, localTools, lastRoom, setLastRoom, openRoom, closeRoom, setLocalOnly, erase, memberName, setMemberName } : null),
+    [base, rooms, localTools, lastRoom, openRoom, closeRoom, setLocalOnly, erase, memberName, setMemberName],
   );
 
   if (erased) {
@@ -402,6 +467,33 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   if (!value) {
     return <p className="p-8 text-center text-slate-500">{t('sync.loading')}</p>;
   }
+  return <RoomsContext.Provider value={value}>{children}</RoomsContext.Provider>;
+}
+
+/**
+ * Gives a tool its data: the room of the tool if one is open, else the
+ * local document. The tools inside use `useSync` and `useRecords`.
+ */
+export function ToolScope({ tool, children }: { tool: string; children: ReactNode }) {
+  const context = useContext(RoomsContext);
+  if (!context) throw new Error('ToolScope must be used inside SyncProvider');
+  const { base, rooms, memberName, setMemberName } = context;
+  const room = rooms[tool];
+  const session = room?.session ?? (MEMORY_ONLY_TOOLS.has(tool) ? base.localMemory : base.local);
+  const value = useMemo<SyncValue>(
+    () => ({
+      doc: session.doc,
+      privateDoc: base.private.doc,
+      awareness: session.awareness,
+      memberId: session.memberId,
+      memberName,
+      setMemberName,
+      space: room ? { name: room.name, signaling: room.signaling } : null,
+      peers: room?.peers ?? 0,
+      signaling: room?.signalingState ?? 'none',
+    }),
+    [session, base, memberName, setMemberName, room],
+  );
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
