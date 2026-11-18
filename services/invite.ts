@@ -23,6 +23,8 @@ function fromBase64Url(text: string): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
 }
 
+const DIRECTION_CONTROL = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
+
 /** `pageUrl` is the address of the app, with or without a "#" part. */
 export function makeInviteLink(pageUrl: string, invite: Invite): string {
   const base = pageUrl.split('#')[0];
@@ -41,6 +43,8 @@ export function readInvite(hash: string, pageIsSecure: boolean): Invite | null {
     if (typeof data !== 'object' || data === null) return null;
     const { n: name, s: servers } = data as Record<string, unknown>;
     if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_SPACE_NAME_LENGTH) return null;
+    // The app shows the name inside a sentence. A direction control character can reverse that sentence.
+    if (DIRECTION_CONTROL.test(name)) return null;
     const list = Array.isArray(servers) ? servers.filter((url): url is string => typeof url === 'string') : [];
     return { name: name.trim(), signaling: parseSignalingUrls(list.join(' '), pageIsSecure).urls };
   } catch {

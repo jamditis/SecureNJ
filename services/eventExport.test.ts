@@ -5,6 +5,8 @@ import { encryptText } from './crypto';
 import { buildEventPage, type EventPageLabels } from './eventExport';
 
 const labels: EventPageLabels = {
+  lang: 'en',
+  dir: 'ltr',
   pageTitle: 'Locked event',
   prompt: 'Type the passphrase.',
   passphrase: 'Passphrase',
@@ -107,9 +109,32 @@ describe('event page', () => {
     expect(() => buildEventPage('plain text', labels)).toThrow();
   });
 
+  it('carries the language and the direction of the labels', async () => {
+    const payload = await encryptText(JSON.stringify(event), 'six words for the event page');
+    const english = openPage(buildEventPage(payload, labels)).window.document.documentElement;
+    expect(english.lang).toBe('en');
+    expect(english.dir).toBe('ltr');
+    const arabic = openPage(buildEventPage(payload, { ...labels, lang: 'ar', dir: 'rtl' })).window.document;
+    expect(arabic.documentElement.lang).toBe('ar');
+    expect(arabic.documentElement.dir).toBe('rtl');
+    // The passphrase reads left to right in each language. The text of the event takes its own direction.
+    expect(arabic.getElementById('passphrase')!.getAttribute('dir')).toBe('ltr');
+    for (const id of ['view-title', 'view-date', 'view-location', 'view-description', 'view-safety']) {
+      expect(arabic.getElementById(id)!.getAttribute('dir')).toBe('auto');
+    }
+  });
+
+  it('accepts only a known direction', async () => {
+    const payload = await encryptText('{}', 'river tulip nine window');
+    const page = buildEventPage(payload, { ...labels, dir: '"><img src=x>' as 'rtl' });
+    const { document } = openPage(page).window;
+    expect(document.querySelector('img')).toBeNull();
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+
   it('escapes markup in labels', async () => {
     const payload = await encryptText('{}', 'river tulip nine window');
-    const html = buildEventPage(payload, { ...labels, pageTitle: '<img src=x>', unlock: '</script>' });
+    const html = buildEventPage(payload, { ...labels, lang: '"><img src=x>', pageTitle: '<img src=x>', unlock: '</script>' });
     const dom = openPage(html);
     expect(dom.window.document.querySelector('img')).toBeNull();
     expect(dom.window.document.querySelector('h1')!.textContent).toBe('<img src=x>');

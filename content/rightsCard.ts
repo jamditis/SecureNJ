@@ -2,8 +2,9 @@
  * GENERATED FILE. Do not edit it by hand.
  *
  * The text of the know-your-rights card. It is legal information that people
- * use when they meet law enforcement. It exists in English only. It is not
- * translated and must not be reworded.
+ * use when they meet law enforcement. This file is the English text, which
+ * must not be reworded. Its translations are in `locales/<code>.json`, under
+ * the keys that `services/contentText.ts` gives.
  * Source: the published build `index-BhtmjXkj.js` (SHA-256 fd1bb203d05dec801be311c2304417d62e11af75ff0fc9495b20823e408bb2a9),
  * through `content-verbatim.json`. A script wrote each string from that file, so
  * no string was typed again. `services/rights.test.ts` holds the SHA-256 of each

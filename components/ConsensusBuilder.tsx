@@ -74,6 +74,7 @@ export default function ConsensusBuilder() {
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
+          dir="auto"
           placeholder={t('consensus.placeholder')}
           aria-label={t('consensus.placeholder')}
           className={`${inputClass} flex-1`}
@@ -96,7 +97,7 @@ export default function ConsensusBuilder() {
             return (
               <article key={proposal.id} className={`bg-white p-6 rounded-3xl border border-slate-200 space-y-4 ${closed ? 'opacity-75' : ''}`}>
                 <div className="flex justify-between items-start gap-4">
-                  <h3 className="text-xl font-bold text-slate-900 leading-tight break-words min-w-0">{proposal.text}</h3>
+                  <h3 dir="auto" className="text-xl font-bold text-slate-900 leading-tight break-words min-w-0">{proposal.text}</h3>
                   <div className="flex shrink-0">
                     <IconButton
                       icon={closed ? Unlock : Lock}
@@ -147,9 +148,9 @@ export default function ConsensusBuilder() {
                     {concerns.map((vote) => (
                       <li key={vote.memberId} className={`p-3 rounded-xl break-words ${vote.type === 'block' ? 'bg-red-50 text-red-900' : 'bg-yellow-50 text-yellow-900'}`}>
                         <strong>
-                          {vote.name || t('common.anonymous')} ({t(`consensus.vote.${vote.type}`)}):
+                          <bdi>{vote.name || t('common.anonymous')}</bdi> ({t(`consensus.vote.${vote.type}`)}):
                         </strong>{' '}
-                        {vote.concern}
+                        <bdi>{vote.concern}</bdi>
                       </li>
                     ))}
                   </ul>
@@ -177,6 +178,7 @@ function ConcernForm({ vote, onSave }: { vote: Vote; onSave: (concern: string) =
       <input
         value={concern}
         onChange={(event) => setConcern(event.target.value)}
+        dir="auto"
         placeholder={t('consensus.concernHint')}
         aria-label={t('consensus.concernHint')}
         className={`${inputClass} flex-1`}

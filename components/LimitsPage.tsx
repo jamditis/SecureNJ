@@ -2,7 +2,7 @@ import { useT, type MessageKey } from '../services/i18n';
 
 const DOES: MessageKey[] = ['limits.does.1', 'limits.does.2', 'limits.does.3', 'limits.does.4'];
 const HABITS: MessageKey[] = ['limits.habit.1', 'limits.habit.2', 'limits.habit.3', 'limits.habit.4', 'limits.habit.5'];
-const NOT_COUNT = 13;
+const NOT_COUNT = 14;
 
 /**
  * The statement of what the site protects and what it does not. Each
@@ -24,7 +24,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.doesTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {DOES.map((key) => (
             <li key={key}>{t(key)}</li>
           ))}
@@ -33,7 +33,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.doesNotTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {doesNot.map(({ lead, text }) => (
             <li key={lead}>
               <strong>{t(lead)}</strong> {t(text)}
@@ -44,7 +44,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.habitsTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {HABITS.map((key) => (
             <li key={key}>{t(key)}</li>
           ))}

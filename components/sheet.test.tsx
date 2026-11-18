@@ -3,7 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_EXAMPLE, SPANISH_LINKS, STARTER_LISTINGS } from '../content/resourceSheet';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor, translationOf } from '../services/i18n';
 import { DRAFT_KEY, LEGACY_DRAFT_KEY, LINK_PROTOCOLS } from '../services/sheet';
 import ResourceSheet from './ResourceSheet';
 
@@ -273,31 +273,51 @@ describe('links on the sheet', () => {
 describe('resource sheet in Spanish', () => {
   const renderInSpanish = () =>
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <ResourceSheet />
       </I18nContext.Provider>,
     );
 
-  it('says that the starters are in English and links to the material in Spanish of the old site', () => {
+  it('says that the names and the numbers of the starters are not translated, and links to the material in Spanish of the old site', () => {
     renderInSpanish();
-    expect(screen.getByText(/Las entradas iniciales de Nueva Jersey están en inglés/)).toBeTruthy();
+    expect(screen.getByText(/Los nombres y los números de las entradas iniciales de Nueva Jersey no se traducen/)).toBeTruthy();
     const hrefs = ['Tarjetas rojas del ILRC', 'Lista de líneas de ayuda de la National Network for Immigrant and Refugee Rights', 'Guía de la ACLU en español'].map((name) =>
       screen.getByRole('link', { name }).getAttribute('href'),
     );
     expect(hrefs).toEqual(SPANISH_LINKS.map((link) => link.url));
   });
 
-  it('adds the starters in English, with no translation', async () => {
+  it('adds the starters with the description in Spanish, and with the exact names and numbers', async () => {
+    const es = translationOf('es');
     const user = userEvent.setup();
     renderInSpanish();
     await user.click(screen.getByRole('button', { name: 'Agregar entradas iniciales de Nueva Jersey' }));
     const items = within(screen.getByRole('region', { name: 'Hoja de recursos para imprimir' })).getAllByRole('listitem');
-    expect(items.map((item) => item.textContent)).toEqual(STARTER_LISTINGS.map((starter) => starter.name + starter.offers + starter.when + starter.contact));
-    expect(screen.getByLabelText<HTMLInputElement>('Nota corta').placeholder).toBe(NOTE_EXAMPLE);
+    expect(items.map((item) => item.textContent)).toEqual(
+      STARTER_LISTINGS.map((starter, index) => starter.name + es[`content.sheet.starter${index}.offers`] + starter.when + starter.contact),
+    );
+    // The contact has no translation: it is a phone number or an address, and it becomes a link.
+    expect(items[0].textContent).toBe('NJ 211Referencias para vivienda, comida, servicios públicos y otras necesidadesDial 211 or nj211.org');
+    expect(items[1].textContent).toContain('lsnj.org');
+    expect(within(items[2]).getByRole('link', { name: '1-800-308-0878' }).getAttribute('href')).toBe('tel:18003080878');
+    expect(Object.keys(es).filter((key) => /^content\.sheet\.starter\d+\.contact$/.test(key))).toEqual([]);
+    expect(screen.getByLabelText<HTMLInputElement>('Nota corta').placeholder).toBe('Revisado en noviembre de 2026');
+    expect(NOTE_EXAMPLE).toBe('Checked November 2026');
+  });
+
+  it('shows the guide that exists only in Spanish to a reader of Spanish only', () => {
+    render(
+      <I18nContext.Provider value={i18nFor('pt')}>
+        <ResourceSheet />
+      </I18nContext.Provider>,
+    );
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toContain(SPANISH_LINKS[0].url);
+    expect(hrefs).not.toContain('https://www.aclu.org/files/kyr/MKG17-KYR-PoliceImmigrationFBI-OnePager-Spanish-v01.pdf');
   });
 
   it('does not show the note about English in the English app', () => {
     render(<ResourceSheet />);
-    expect(screen.queryByText(/The New Jersey starters are in English/)).toBeNull();
+    expect(screen.queryByText(/The names and the numbers of the New Jersey starters/)).toBeNull();
   });
 });

@@ -178,7 +178,8 @@ export default function TacticalWhiteboard() {
           />
         </div>
 
-        <div ref={containerRef} className="rounded-2xl overflow-hidden touch-none">
+        {/* The board is a picture with x from left to right, the same for each member, so its layer does not mirror. */}
+        <div ref={containerRef} dir="ltr" className="rounded-2xl overflow-hidden touch-none">
           <canvas
             ref={canvasRef}
             aria-label={t('board.canvas')}

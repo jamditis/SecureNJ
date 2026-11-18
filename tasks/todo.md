@@ -105,20 +105,63 @@ Decisions from the owner (2026-11-18): "i dont want a person to start it", "auto
 
 The publish workflow can run only after the merge. Its first run is the first real test of the push to `gh-pages` and of the Pages build request.
 
-## Pull request 4 of this plan: automatic translation. Not started.
+## Pull request 4 of this plan: translations with no person step. In work.
 
 Decisions from the owner (2026-11-18):
 
 - Translate the legal and reference text too (rights card, family plan, resource text). This replaces "English text plus official links".
 - Add Portuguese (Brazil), Haitian Creole, Chinese (Simplified), and Arabic.
-- Translate new text in CI with LibreTranslate, which runs inside the workflow. No key and no outside service.
+- No translation engine. "we could just translate it ourselves": the agent that changes English text writes the translations in the same pull request. (This replaced a first choice of LibreTranslate in CI.)
+- Keep the machine translation note. No person review.
+
+Design:
+
+- English stays in `locales/en/*.ts` (UI) and `content/*.ts` (reference text).
+- Each other language is one file, `locales/<code>.json`, with a flat map from key to text. A key that is missing shows in English.
+- `locales/<code>.stamp.json` holds, for each key, a short hash of the English text at the time of the translation. A different hash means that the English text changed. The test suite fails on such a stale translation.
+- Reference text gets keys (`content.…`) through one function for each content file in `services/contentText.ts`. The same function gives the English text to the script and the translated text to the component.
+- A translated message is checked when the app starts: the slots and the numbers of the English text must be there. An entry that fails shows in English.
+- `scripts/translate.ts` lists the text that needs a translation, writes a work file for each language (`--todo`), and puts the finished work into the language files (`--apply`). It does not translate. Only `--apply` writes a stamp, and it refuses a translation of English text that changed.
+- Arabic is right to left: `dir="rtl"` on the page and on exported pages, and layout classes that follow the text direction.
+
+Steps:
+
+- [x] Language files as JSON, with fallback to English, and tests.
+- [x] Reference text with keys. Components show it in the language of the UI. The rights card can also show in English.
+- [x] Script for missing and stale translations, with tests.
+- [x] Translations for all text: Spanish, Portuguese, Haitian Creole, Chinese, Arabic.
+- [x] Right-to-left layout for Arabic, with an end-to-end check.
+- [x] One word for the room of a tool in the English text ("room", not "space").
+- [x] Docs.
+- [x] Review by two independent agents (correctness; security and text direction).
+
+### Review of this pull request
+
+Confirmed findings that are fixed, each with a test:
+
+- A language file could change the contact of a starter listing, which becomes a `tel:` or `https:` link. The contact has no translation now.
+- The check of a translated message accepted a phone number with its parts in a different order, a second phone number, and a changed address, form number, file name, or code span.
+- Nothing stopped a translation of the rights card that put the sentences to say to an agent into a different language.
+- The command that wrote stamps could mark a translation of old English text as current. That command is gone. Work files carry the English text that the translator read.
+- An invite link could carry a direction control character in the group name, which can reverse the sentence that shows the name.
+- A printed card in a language other than English did not say that it is a machine translation.
+- In an Arabic card, an English sentence showed its last period first.
+- A guide that exists only in Spanish showed for each language.
+- React keys of lists were translated text. They are positions now.
+
+Not fixed, and why:
+
+- A name that a user typed (group name, member name) inside a translated sentence has no isolation (`<bdi>`), so mixed directions can show in an order that is hard to read. The fix needs a change of each place that puts a name into a sentence. A hostile invite can no longer use this.
+- The printed family plan has no machine translation line. It is a private paper with questions and the answers of the family, not a text to hand out.
+- The placeholder of a field with a fixed left to right direction (passphrase, phone) sits on the left in Arabic.
+- Printing in Arabic was not tested on paper or in a print preview.
 
 ## Known limits, not in either pull request
 
 - Data at rest in the browser is not encrypted.
 - No roles inside a space. Each member can change and delete all data.
 - TURN servers that need credentials are not supported.
-- The main bundle is about 700 kB. Split it by tool if the load time is a problem.
+- The main bundle is about 1,000 kB (310 kB compressed), because all six languages are in it. The service worker saves only the files that `index.html` names, so a language in its own file would not open offline. Split the bundle by tool and by language, with a list of files for the service worker, if the load time is a problem.
 - The photo cleaner draws a photo at full size. A very large photo can be more than a phone browser permits.
 - In the photo cleaner, a cover can be placed with a pointer only, not with the keyboard.
 - With no room, all shared tools use one local document.

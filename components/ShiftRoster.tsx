@@ -106,7 +106,7 @@ export default function ShiftRoster() {
             return (
               <article key={shift.id} className={`bg-white p-6 rounded-3xl border space-y-3 ${past ? 'opacity-60 border-slate-200' : open > 0 ? 'border-amber-300' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-bold text-slate-900 text-lg leading-tight break-words min-w-0">{shift.title}</h3>
+                  <h3 dir="auto" className="font-bold text-slate-900 text-lg leading-tight break-words min-w-0">{shift.title}</h3>
                   <div className="flex shrink-0">
                     <IconButton icon={Pencil} label={t('shifts.edit')} onClick={() => setEditing({ id: shift.id, draft: toShiftDraft(shift) })} />
                     <IconButton icon={Trash2} label={t('shifts.delete')} onClick={() => remove(shift)} />
@@ -118,17 +118,17 @@ export default function ShiftRoster() {
                 {shift.location && (
                   <p className="text-sm text-slate-600 flex items-start gap-1">
                     <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" aria-hidden="true" />
-                    <span className="break-words min-w-0">{shift.location}</span>
+                    <span dir="auto" className="break-words min-w-0">{shift.location}</span>
                   </p>
                 )}
-                {shift.notes && <p className="text-sm text-slate-600 break-words whitespace-pre-wrap">{shift.notes}</p>}
+                {shift.notes && <p dir="auto" className="text-sm text-slate-600 break-words whitespace-pre-wrap">{shift.notes}</p>}
                 <p className={`text-xs font-bold ${open > 0 && !past ? 'text-amber-700' : 'text-emerald-700'}`}>
                   {open > 0 ? t('shifts.needsMore', { count: open, signed: people.length, needed: shift.needed }) : t('shifts.full', { signed: people.length, needed: shift.needed })}
                 </p>
                 {people.length > 0 && (
                   <ul className="flex flex-wrap gap-1">
                     {people.map((person) => (
-                      <li key={person.memberId} className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                      <li key={person.memberId} dir="auto" className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
                         {person.name || t('common.anonymous')}
                       </li>
                     ))}
@@ -155,10 +155,10 @@ export default function ShiftRoster() {
         >
           <form onSubmit={save} className="space-y-4">
             <Field label={t('shifts.field.title')}>
-              <input {...field('title')} autoFocus required placeholder={t('shifts.hint.title')} />
+              <input {...field('title')} dir="auto" autoFocus required placeholder={t('shifts.hint.title')} />
             </Field>
             <Field label={t('shifts.field.location')}>
-              <input {...field('location')} />
+              <input {...field('location')} dir="auto" />
             </Field>
             <Field label={t('shifts.field.date')}>
               <input type="date" {...field('date')} required />
@@ -175,7 +175,7 @@ export default function ShiftRoster() {
               <input type="number" min={1} max={999} {...field('needed')} required />
             </Field>
             <Field label={t('shifts.field.notes')}>
-              <textarea {...field('notes')} rows={2} />
+              <textarea {...field('notes')} dir="auto" rows={2} />
             </Field>
             {problem && <Notice tone="error">{t(`shifts.problem.${problem}`)}</Notice>}
             <div className="flex gap-3">

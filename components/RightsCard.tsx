@@ -1,9 +1,10 @@
-import { Fragment, useId, useState, type ReactNode } from 'react';
+import { Fragment, useId, useMemo, useState, type ReactNode } from 'react';
 import { Printer } from 'lucide-react';
 import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
-import { RIGHTS_CARD, RIGHTS_LINKS } from '../content/rightsCard';
-import { useLocale, useT } from '../services/i18n';
-import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, isDefaultHotline, splitTemplate, type ContactKey } from '../services/rights';
+import { RIGHTS_LINKS } from '../content/rightsCard';
+import { englishContent, rightsCardText } from '../services/contentText';
+import { useContentText, useLocale, useT } from '../services/i18n';
+import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, englishQuotes, isDefaultHotline, splitAtEnglish, splitTemplate, type ContactKey } from '../services/rights';
 import { Button, Notice, ToolHeader, inputClass } from './ui';
 
 /** A link to a different site. It opens in a new tab and sends no referrer. */
@@ -26,6 +27,26 @@ function Rich({ template, slots }: { template: string; slots: Record<string, Rea
   );
 }
 
+/** The English card. A translated line keeps its sentences to say to an agent from here. */
+const ENGLISH_CARD = rightsCardText(englishContent);
+
+/** A line of the card. A sentence that stays in English gets its own language and direction. */
+function CardLine({ line, english }: { line: string; english: readonly string[] }) {
+  return (
+    <>
+      {splitAtEnglish(line, english).map((part, index) =>
+        part.english ? (
+          <bdi key={index} lang="en" dir="ltr">
+            {part.text}
+          </bdi>
+        ) : (
+          <Fragment key={index}>{part.text}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
 const labelClass = 'block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5';
 const hintClass = 'text-xs text-slate-500 leading-relaxed mt-1.5';
 const sectionTitleClass = 'text-lg font-bold text-slate-900';
@@ -33,6 +54,12 @@ const sectionTitleClass = 'text-lg font-bold text-slate-900';
 export default function RightsCard() {
   const t = useT();
   const locale = useLocale();
+  const content = useContentText();
+  // The card is a machine translation in each language but English. A person
+  // can show and print the English text, which is the source.
+  const [inEnglish, setInEnglish] = useState(false);
+  const cardIsEnglish = inEnglish || locale === 'en';
+  const card = useMemo(() => rightsCardText(inEnglish ? englishContent : content), [inEnglish, content]);
   // The three lines are in memory only. A reload of the page removes them.
   const [contacts, setContacts] = useState(defaultContacts);
   const id = useId();
@@ -47,6 +74,8 @@ export default function RightsCard() {
       maxLength={CONTACT_MAX_LENGTH}
       autoComplete="off"
       aria-describedby={hintId}
+      // A name and a phone number take the direction of their own text.
+      dir="auto"
       className={inputClass}
     />
   );
@@ -63,12 +92,13 @@ export default function RightsCard() {
         {locale !== 'en' && (
           <Notice>
             <Rich
-              template={t('rights.englishOnly')}
-              slots={{
-                ilrc: <OutsideLink href={RIGHTS_LINKS.ilrcRedCards}>{t('rights.englishOnly.ilrc')}</OutsideLink>,
-                aclu: <OutsideLink href={RIGHTS_LINKS.acluGuideSpanish}>{t('rights.englishOnly.aclu')}</OutsideLink>,
-              }}
+              template={t('rights.translated')}
+              slots={{ ilrc: <OutsideLink href={RIGHTS_LINKS.ilrcRedCards}>{t('rights.translated.ilrc')}</OutsideLink> }}
             />
+            <label className="flex items-center gap-2 mt-2 font-bold">
+              <input type="checkbox" checked={inEnglish} onChange={(event) => setInEnglish(event.target.checked)} className="w-4 h-4 shrink-0 accent-emerald-600" />
+              {t('rights.showEnglish')}
+            </label>
           </Notice>
         )}
 
@@ -113,19 +143,23 @@ export default function RightsCard() {
         <h3 className={sectionTitleClass}>{t('rights.yourCard')}</h3>
       </div>
 
-      {/* The card is the one part of the page that prints. Its text is English in each language. */}
+      {/* The card is the one part of the page that prints. */}
       <section
         aria-label={t('rights.cardLabel')}
-        lang="en"
+        lang={cardIsEnglish ? 'en' : undefined}
+        dir={cardIsEnglish ? 'ltr' : undefined}
         className="bg-white text-black border-2 border-black max-w-xl p-4 text-sm leading-snug space-y-2 break-inside-avoid"
       >
-        <h3 className="font-serif text-xl font-bold">{RIGHTS_CARD.title}</h3>
-        {RIGHTS_CARD.sections.map((section) => (
-          <Fragment key={section.heading}>
+        <h3 className="font-serif text-xl font-bold">{card.title}</h3>
+        {card.sections.map((section, sectionIndex) => (
+          <Fragment key={sectionIndex}>
             <h4 className="font-bold">{section.heading}</h4>
-            <ul className="list-disc pl-5 space-y-0.5">
-              {section.items.map((item) => (
-                <li key={item}>{item}</li>
+            <ul className="list-disc ps-5 space-y-0.5">
+              {section.items.map((item, itemIndex) => (
+                <li key={itemIndex}>
+                  {/* The English card needs no marks: all of it is English. */}
+                  <CardLine line={item} english={cardIsEnglish ? [] : englishQuotes(ENGLISH_CARD.sections[sectionIndex].items[itemIndex])} />
+                </li>
               ))}
             </ul>
           </Fragment>
@@ -134,19 +168,21 @@ export default function RightsCard() {
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-t border-black pt-2">
             {rows.map((row) => (
               <Fragment key={row.key}>
-                <dt className="font-bold">{RIGHTS_CARD.contactLabels[row.key]}</dt>
-                <dd className="break-words min-w-0">{row.value}</dd>
+                <dt className="font-bold">{card.contactLabels[row.key]}</dt>
+                <dd dir="auto" className="break-words min-w-0">{row.value}</dd>
               </Fragment>
             ))}
           </dl>
         )}
-        <p className="text-xs">{RIGHTS_CARD.sourceLine}</p>
+        <p className="text-xs">{card.sourceLine}</p>
+        {/* A printed card can go from hand to hand. It must say what it is. */}
+        {!cardIsEnglish && <p className="text-xs font-bold">{t('rights.printNote')}</p>}
       </section>
 
       <div className="no-print space-y-6">
         <div className="space-y-2">
           <h3 className={sectionTitleClass}>{t('rights.official.title')}</h3>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+          <ul className="list-disc ps-5 space-y-1 text-sm text-slate-700">
             <li>
               <Rich template={t('rights.official.ilrc')} slots={{ link: <OutsideLink href={RIGHTS_LINKS.ilrcRedCards}>{t('rights.official.ilrc.link')}</OutsideLink> }} />
             </li>
@@ -166,7 +202,7 @@ export default function RightsCard() {
         </div>
         <div className="space-y-2">
           <h3 className={sectionTitleClass}>{t('rights.phone.title')}</h3>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+          <ul className="list-disc ps-5 space-y-1 text-sm text-slate-700">
             <li>{t('rights.phone.memorize')}</li>
             <li>{t('rights.phone.passcode')}</li>
             <li>

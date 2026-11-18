@@ -52,3 +52,33 @@ export function splitTemplate(template: string): TemplatePart[] {
   if (last < template.length) parts.push({ kind: 'text', value: template.slice(last) });
   return parts;
 }
+
+/** The sentences between straight double quotation marks in a line of the English card. */
+export const englishQuotes = (englishLine: string): string[] => (englishLine.match(/"[^"]+"/g) ?? []).map((quote) => quote.slice(1, -1));
+
+/**
+ * Splits a translated card line at each sentence that stays in English, so
+ * that the component can mark its language and its direction. In a right to
+ * left line, an English sentence with no mark shows its last period first.
+ */
+export function splitAtEnglish(line: string, english: readonly string[]): { text: string; english: boolean }[] {
+  const parts: { text: string; english: boolean }[] = [];
+  let rest = line;
+  for (;;) {
+    let first = -1;
+    let found = '';
+    for (const sentence of english) {
+      const index = sentence === '' ? -1 : rest.indexOf(sentence);
+      if (index !== -1 && (first === -1 || index < first)) {
+        first = index;
+        found = sentence;
+      }
+    }
+    if (first === -1) break;
+    if (first > 0) parts.push({ text: rest.slice(0, first), english: false });
+    parts.push({ text: found, english: true });
+    rest = rest.slice(first + found.length);
+  }
+  if (rest !== '' || parts.length === 0) parts.push({ text: rest, english: false });
+  return parts;
+}

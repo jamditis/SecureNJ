@@ -1,6 +1,6 @@
 /**
  * English is the source language. Each area of the app has one file here.
- * `locales/es/` has a file with the same name and the same keys.
+ * The translations are in `locales/<code>.json`.
  */
 import core from './core';
 import platform from './platform';

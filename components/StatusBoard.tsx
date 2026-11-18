@@ -53,10 +53,10 @@ export default function StatusBoard() {
         {!me || isEditing ? (
           <div className="space-y-4 max-w-md">
             <Field label={t('status.name')}>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('status.nameHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
+              <input value={name} onChange={(e) => setName(e.target.value)} dir="auto" placeholder={t('status.nameHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
             </Field>
             <Field label={t('status.note')}>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('status.noteHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
+              <input value={note} onChange={(e) => setNote(e.target.value)} dir="auto" placeholder={t('status.noteHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
             </Field>
             <Field label={t('status.checkIn')}>
               <select value={checkInMinutes} onChange={(e) => setCheckInMinutes(Number(e.target.value))} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`}>
@@ -135,11 +135,11 @@ function MemberSummary({ user, name, now, locale, dark = false }: MemberSummaryP
         <Icon className="w-6 h-6 text-white" aria-hidden="true" />
       </div>
       <div className="min-w-0">
-        <h4 className={`font-bold truncate ${dark ? 'text-white text-xl' : 'text-slate-900'}`}>{name}</h4>
+        <h4 dir="auto" className={`font-bold truncate ${dark ? 'text-white text-xl' : 'text-slate-900'}`}>{name}</h4>
         <p className={`text-xs font-bold ${dark ? 'text-emerald-400' : 'text-slate-600'}`}>
           {t(`status.option.${user.status}`)} <span className="font-normal text-slate-400">· {timeAgo(user.lastUpdated, now, locale)}</span>
         </p>
-        {user.note && <p className={`text-xs break-words ${dark ? 'text-slate-300' : 'text-slate-500'}`}>{user.note}</p>}
+        {user.note && <p dir="auto" className={`text-xs break-words ${dark ? 'text-slate-300' : 'text-slate-500'}`}>{user.note}</p>}
         {overdue && (
           <p className="text-xs font-bold text-red-500 flex items-center gap-1">
             <Clock className="w-3 h-3" aria-hidden="true" /> {t('status.overdue')}

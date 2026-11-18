@@ -8,7 +8,8 @@
 const infoPages = {
   'resources.navTitle': 'Resources',
   'resources.lede': "Established tools and organizations, and prompts for everyday nonprofit work. This site isn't affiliated with any of them.",
-  'resources.englishNotice': 'The names and the notes of the links, and the AI prompts, are in English.',
+  // Shown only when the language of the app is not English.
+  'resources.namesNotice': 'The names of the links are in English, so that you can find the same name on the page that opens.',
   'resources.group.communication': 'Private communication',
   'resources.group.rights': 'Know your rights',
   'resources.group.newJersey': 'Help in New Jersey',

@@ -6,6 +6,7 @@ import { MAX_LOCKED_FILE_BYTES, buildLockedFilePage, lockFile, packFile, type Lo
 
 const labels: LockedFilePageLabels = {
   lang: 'en',
+  dir: 'ltr',
   pageTitle: 'Locked file',
   prompt: 'Type the passphrase.',
   passphrase: 'Passphrase',
@@ -182,6 +183,24 @@ describe('locked file', () => {
     await unlock(dom, PASSPHRASE);
     expect(saved).toHaveLength(0);
     expect(dom.window.document.getElementById('error')!.hidden).toBe(false);
+  });
+
+  it('carries the language and the direction of the labels', async () => {
+    const english = openPage(buildLockedFilePage('AAAA', labels)).dom.window.document.documentElement;
+    expect(english.lang).toBe('en');
+    expect(english.dir).toBe('ltr');
+    const { document } = openPage(buildLockedFilePage('AAAA', { ...labels, lang: 'ar', dir: 'rtl' })).dom.window;
+    expect(document.documentElement.lang).toBe('ar');
+    expect(document.documentElement.dir).toBe('rtl');
+    // The passphrase reads left to right in each language. The file name takes its own direction.
+    expect(document.getElementById('passphrase')!.getAttribute('dir')).toBe('ltr');
+    expect(document.getElementById('done')!.getAttribute('dir')).toBe('auto');
+  });
+
+  it('accepts only a known direction', () => {
+    const { document } = openPage(buildLockedFilePage('AAAA', { ...labels, dir: '"><img src=x>' as 'rtl' })).dom.window;
+    expect(document.querySelector('img')).toBeNull();
+    expect(document.documentElement.dir).toBe('ltr');
   });
 
   it('escapes markup in labels', async () => {

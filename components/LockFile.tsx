@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { FileLock } from 'lucide-react';
 import { downloadBlob } from '../services/download';
-import { useLocale, useT, type MessageKey } from '../services/i18n';
+import { LOCALES, useLocale, useT, type MessageKey } from '../services/i18n';
 import { LOCKED_FILE_NAME, MAX_LOCKED_FILE_BYTES, MAX_LOCKED_FILE_MB, lockFile } from '../services/lockedFile';
 import { passphraseProblem } from '../services/passphrase';
 import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
@@ -29,7 +29,8 @@ export default function LockFile() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       // The person who opens the file reads these labels, in the language of the person who made it.
       const page = await lockFile({ name: file.name, type: file.type, bytes }, passphrase, {
-        lang: locale,
+        lang: LOCALES[locale].htmlLang,
+        dir: LOCALES[locale].dir,
         pageTitle: t('lock.page.title'),
         prompt: t('lock.page.prompt'),
         passphrase: t('passphrase.label'),
@@ -82,7 +83,7 @@ export default function LockFile() {
 
       <section className="space-y-3">
         <h3 className="font-bold text-lg text-slate-900">{t('lock.know.title')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-sm text-slate-600 leading-relaxed">
           <li>{t('lock.know.1')}</li>
           <li>{t('lock.know.2')}</li>
           <li>{t('lock.know.3')}</li>

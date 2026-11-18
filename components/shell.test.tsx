@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import en from '../locales/en/index';
-import es from '../locales/es/index';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, I18nProvider, i18nFor } from '../services/i18n';
 import { hasUnsavedWork, useUnsavedWork } from '../services/unsaved';
 import { TOOLS, readRoute } from '../tools';
 import LanguageSwitch from './LanguageSwitch';
@@ -18,23 +16,23 @@ afterEach(() => {
 describe('page about limits', () => {
   it('shows each limit, in English and in Spanish', () => {
     render(<LimitsPage />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 14 + 5);
     expect(screen.getByText("Data on your device isn't encrypted.")).toBeTruthy();
     cleanup();
 
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <LimitsPage />
       </I18nContext.Provider>,
     );
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 14 + 5);
     expect(screen.getByText('Los datos en tu dispositivo no están cifrados.')).toBeTruthy();
   });
 });
 
 describe('language switch', () => {
   const inSpanish = (ui: React.ReactElement) => (
-    <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>{ui}</I18nContext.Provider>
+    <I18nContext.Provider value={i18nFor('es')}>{ui}</I18nContext.Provider>
   );
 
   it('tells a reader of the Spanish text that a machine made it and that no person reviewed it', () => {
@@ -52,15 +50,26 @@ describe('language switch', () => {
   });
 });
 
-describe('text in two languages', () => {
-  it('has the same placeholders in each Spanish message as in the English message', () => {
-    const placeholders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(',');
-    const different = (Object.keys(en) as (keyof typeof en)[]).filter((key) => placeholders(en[key]) !== placeholders(es[key]));
-    expect(different).toEqual([]);
+describe('page language and direction', () => {
+  afterEach(() => {
+    localStorage.removeItem('snj.locale');
+    document.documentElement.removeAttribute('dir');
+    document.documentElement.removeAttribute('lang');
   });
 
-  it('has no empty Spanish message', () => {
-    expect(Object.entries(es).filter(([, text]) => text.trim() === '')).toEqual([]);
+  it.each([
+    ['ar', 'ar', 'rtl'],
+    ['pt', 'pt-BR', 'ltr'],
+    ['en', 'en', 'ltr'],
+  ])('gives the page the language tag and the direction of the saved language %s', (saved, lang, dir) => {
+    localStorage.setItem('snj.locale', saved);
+    render(
+      <I18nProvider>
+        <p />
+      </I18nProvider>,
+    );
+    expect(document.documentElement.lang).toBe(lang);
+    expect(document.documentElement.dir).toBe(dir);
   });
 });
 

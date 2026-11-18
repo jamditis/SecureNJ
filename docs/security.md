@@ -42,6 +42,7 @@ The group name is not a secret. The passphrase is the only secret. The app refus
 11. **The signaling server can show false peers.** It cannot read or change data, but it can send old connection messages again. The peer count can then be too high, and connections can be slow.
 12. **The content security policy permits a WebSocket to any host**, because your group sets the signaling server in the app. The policy blocks scripts, styles, and HTTP requests from other hosts. It is not a barrier against a member who changes the code.
 13. **The event page is not signed.** A person who can change the file in transit can replace it with a page that looks the same and sends the passphrase to them. Send the file through a channel that you trust, or tell participants to open it with no network connection.
+14. **Other languages are machine translations.** No person reviewed the text in languages other than English, and that includes the rights card. A translation can be wrong. The app refuses a translation that changes a slot, a number, a phone number, an address, or a sentence of the rights card that a person says to an agent, and it shows the English text for that message. It cannot check the meaning. A language file is trusted like code: a change to it can change what a reader is told to do.
 
 ## Encrypted exports
 

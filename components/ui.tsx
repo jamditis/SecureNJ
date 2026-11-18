@@ -228,6 +228,8 @@ export function PassphraseInput({ value, onChange, allowGenerate = false, autoFo
           autoComplete="off"
           autoFocus={autoFocus}
           spellCheck={false}
+          // A passphrase reads left to right in each language.
+          dir="ltr"
           className={`${inputClass} font-mono`}
         />
         <IconButton

@@ -4,18 +4,18 @@ import { makeTranslate } from './i18n';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 
 describe('makeTranslate', () => {
-  const t = makeTranslate(en);
+  const t = makeTranslate();
 
   it('returns the text for a key', () => {
     expect(t('common.cancel')).toBe('Cancel');
   });
 
   it('replaces each placeholder with its value', () => {
-    expect(t('dashboard.inSpace', { name: 'Ironbound', count: 3 })).toBe('Space: Ironbound · peers: 3');
+    expect(t('rights.hint.hotline', { name: 'A', source: 'B' })).toBe('This is the A number, as listed by the B. Call it to confirm before you print or share it.');
   });
 
   it('keeps a placeholder that has no value, so a missing value is visible', () => {
-    expect(t('dashboard.inSpace', { name: 'Ironbound' })).toBe('Space: Ironbound · peers: {count}');
+    expect(t('rights.hint.hotline', { name: 'A' })).toBe('This is the A number, as listed by the {source}. Call it to confirm before you print or share it.');
   });
 
   it('does not treat a value as a template', () => {

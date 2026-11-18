@@ -3,7 +3,7 @@ import { Download } from 'lucide-react';
 import { encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { buildEventPage } from '../services/eventExport';
-import { useT } from '../services/i18n';
+import { LOCALES, useLocale, useT } from '../services/i18n';
 import { passphraseProblem } from '../services/passphrase';
 import type { EventDetails } from '../types';
 import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
@@ -12,6 +12,7 @@ const EMPTY_EVENT: EventDetails = { title: '', date: '', location: '', descripti
 
 export default function EventCreator() {
   const t = useT();
+  const locale = useLocale();
   const [details, setDetails] = useState(EMPTY_EVENT);
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,11 +22,16 @@ export default function EventCreator() {
     value: details[key],
     onChange: (event: { target: { value: string } }) => setDetails({ ...details, [key]: event.target.value }),
     className: inputClass,
+    // The text of the event can be in a different language than the UI.
+    dir: 'auto',
   });
 
   const exportPage = async () => {
     const payload = await encryptText(JSON.stringify(details), passphrase);
+    // The person who opens the page reads these labels, in the language of the person who made it.
     const page = buildEventPage(payload, {
+      lang: LOCALES[locale].htmlLang,
+      dir: LOCALES[locale].dir,
       pageTitle: t('event.page.title'),
       prompt: t('event.page.prompt'),
       passphrase: t('passphrase.label'),
@@ -85,7 +91,7 @@ export default function EventCreator() {
 
         <aside className="bg-slate-900 text-white p-6 rounded-3xl space-y-3 self-start">
           <h3 className="font-bold text-lg">{t('event.howTitle')}</h3>
-          <ol className="space-y-2 text-sm text-slate-300 list-decimal pl-4">
+          <ol className="space-y-2 text-sm text-slate-300 list-decimal ps-4">
             <li>{t('event.how.1')}</li>
             <li>{t('event.how.2')}</li>
             <li>{t('event.how.3')}</li>

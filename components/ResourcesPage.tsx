@@ -1,20 +1,24 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink } from 'lucide-react';
-import { AI_PROMPTS, RESOURCE_GROUPS, type AiPrompt } from '../content/resources';
-import { useLocale, useT } from '../services/i18n';
+import type { AiPrompt } from '../content/resources';
+import { resourcesText } from '../services/contentText';
+import { useContentText, useLocale, useT } from '../services/i18n';
 import { copyText } from '../services/sharePage';
 import { Button, Notice } from './ui';
 
 const CAUTIONS = ['people', 'settings', 'numbers', 'work'] as const;
 
 /**
- * Outside links and AI prompts. The names, the notes, and the prompts come
- * from `content/resources.ts` and are in English in each language. A prompt
- * is text that the visitor copies: the page only shows it and copies it.
+ * Outside links and AI prompts, from `content/resources.ts`. The name of a
+ * link is in English in each language, so that a reader finds the same name
+ * on the page that opens. A prompt is text that the visitor copies: the page
+ * only shows it and copies it.
  */
 export default function ResourcesPage() {
   const t = useT();
   const locale = useLocale();
+  const content = useContentText();
+  const text = useMemo(() => resourcesText(content), [content]);
   // The title of the prompt that was copied last, or of the one that the browser did not copy.
   const [copied, setCopied] = useState('');
   const [failed, setFailed] = useState('');
@@ -32,9 +36,9 @@ export default function ResourcesPage() {
         <p className="text-lg text-slate-600 max-w-2xl leading-relaxed">{t('resources.lede')}</p>
       </div>
 
-      {locale !== 'en' && <Notice>{t('resources.englishNotice')}</Notice>}
+      {locale !== 'en' && <Notice>{t('resources.namesNotice')}</Notice>}
 
-      {RESOURCE_GROUPS.map((group) => (
+      {text.groups.map((group) => (
         <section key={group.id} className="space-y-4">
           <h3 className="text-xl font-bold text-slate-900">{t(`resources.group.${group.id}`)}</h3>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -47,10 +51,12 @@ export default function ResourcesPage() {
                   aria-label={t('resources.linkLabel', { name: item.name })}
                   className="inline-flex items-start gap-1.5 font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
                 >
-                  <span lang="en">{item.name}</span>
+                  <span lang="en" dir="ltr">
+                    {item.name}
+                  </span>
                   <ExternalLink className="w-3.5 h-3.5 mt-1 shrink-0" aria-hidden="true" />
                 </a>
-                <p lang="en" className="text-slate-600 text-sm leading-relaxed mt-1">
+                <p className="text-slate-600 text-sm leading-relaxed mt-1">
                   {item.note}
                 </p>
               </li>
@@ -72,9 +78,9 @@ export default function ResourcesPage() {
           ))}
         </ul>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {AI_PROMPTS.map((prompt) => (
+          {text.prompts.map((prompt, index) => (
             <PromptCard
-              key={prompt.title}
+              key={index}
               prompt={prompt}
               copied={copied === prompt.title}
               failed={failed === prompt.title}
@@ -95,13 +101,13 @@ function PromptCard({ prompt, copied, failed, onCopy }: { prompt: AiPrompt; copi
   const titleId = useId();
   return (
     <article aria-labelledby={titleId} className="flex flex-col gap-3 p-5 bg-white border border-slate-200 rounded-2xl">
-      <div lang="en">
+      <div>
         <h4 id={titleId} className="font-bold text-slate-900">
           {prompt.title}
         </h4>
         <p className="text-sm text-slate-500">{prompt.when}</p>
       </div>
-      <p lang="en" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+      <p className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
         {prompt.text}
       </p>
       {failed && <Notice tone="error">{t('resources.copyFailed')}</Notice>}

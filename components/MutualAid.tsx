@@ -152,14 +152,14 @@ export default function MutualAid() {
           {t('aid.showDone')}
         </label>
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t('aid.search')}
             aria-label={t('aid.search')}
-            className={`${inputClass} pl-9`}
+            className={`${inputClass} ps-9`}
           />
         </div>
       </div>
@@ -268,7 +268,7 @@ export default function MutualAid() {
               ))}
             </div>
             <Field label={t('aid.field.title')}>
-              <input value={editing.draft.title} onChange={(e) => draftField('title', e.target.value)} autoFocus required className={inputClass} />
+              <input value={editing.draft.title} onChange={(e) => draftField('title', e.target.value)} dir="auto" autoFocus required className={inputClass} />
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label={t('aid.category')}>
@@ -282,11 +282,11 @@ export default function MutualAid() {
                 </select>
               </Field>
               <Field label={t('aid.field.contact')}>
-                <input value={editing.draft.contact} onChange={(e) => draftField('contact', e.target.value)} className={inputClass} />
+                <input value={editing.draft.contact} onChange={(e) => draftField('contact', e.target.value)} dir="auto" className={inputClass} />
               </Field>
             </div>
             <Field label={t('aid.field.description')}>
-              <textarea value={editing.draft.description} onChange={(e) => draftField('description', e.target.value)} rows={3} className={inputClass} />
+              <textarea value={editing.draft.description} onChange={(e) => draftField('description', e.target.value)} dir="auto" rows={3} className={inputClass} />
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={editing.draft.urgent} onChange={(e) => draftField('urgent', e.target.checked)} className="w-4 h-4 accent-red-600" />
@@ -332,19 +332,19 @@ function PostCard({ post, status, claimedBy, now, categoryLabel, onStatus, onEdi
           {t(`aid.type.${post.type}`)}
         </span>
         {post.urgent && <span className="px-2 py-1 rounded-lg text-xs font-black uppercase bg-red-100 text-red-700">{t('aid.urgentBadge')}</span>}
-        <span className="ml-auto text-xs text-slate-400">{timeAgo(post.timestamp, now, locale)}</span>
+        <span className="ms-auto text-xs text-slate-400">{timeAgo(post.timestamp, now, locale)}</span>
       </div>
       <div className="flex-1 space-y-2">
-        <h3 className="font-bold text-slate-900 text-lg leading-tight break-words">{post.title}</h3>
+        <h3 dir="auto" className="font-bold text-slate-900 text-lg leading-tight break-words">{post.title}</h3>
         <span className="inline-block text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{categoryLabel}</span>
-        <p className="text-slate-600 text-sm break-words whitespace-pre-wrap">{post.description}</p>
+        <p dir="auto" className="text-slate-600 text-sm break-words whitespace-pre-wrap">{post.description}</p>
         <p className="text-xs font-bold text-slate-500">
           {status === 'claimed' && claimedBy ? t('aid.status.claimedBy', { name: claimedBy }) : t(`aid.status.${status}`)}
         </p>
       </div>
       {post.contact &&
         (showContact ? (
-          <p className="bg-slate-900 text-white p-3 rounded-xl text-center font-mono text-sm break-all">{post.contact}</p>
+          <p dir="auto" className="bg-slate-900 text-white p-3 rounded-xl text-center font-mono text-sm break-all">{post.contact}</p>
         ) : (
           <Button variant="light" onClick={() => setShowContact(true)}>
             <Phone className="w-4 h-4" aria-hidden="true" /> {t('aid.showContact')}
@@ -366,7 +366,7 @@ function PostCard({ post, status, claimedBy, now, categoryLabel, onStatus, onEdi
             {t('aid.reopen')}
           </Button>
         )}
-        <IconButton icon={Pencil} label={t('aid.edit')} className="ml-auto" onClick={onEdit} />
+        <IconButton icon={Pencil} label={t('aid.edit')} className="ms-auto" onClick={onEdit} />
         <IconButton icon={Trash2} label={t('aid.delete')} onClick={onDelete} />
       </div>
     </article>
