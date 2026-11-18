@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "e2e": "node e2e/smoke.mjs",
     "signaling": "y-webrtc-signaling",
+    "translate": "node scripts/run.mjs translate",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e"
   },
   "dependencies": {

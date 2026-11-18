@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
 import { RIGHTS_CARD, RIGHTS_LINKS } from '../content/rightsCard';
 import en from '../locales/en/rights';
-import es from '../locales/es/rights';
 import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, isDefaultHotline, splitTemplate } from './rights';
 
 /**
@@ -100,7 +99,7 @@ describe('message with link positions', () => {
   });
 
   it('loses no character of the message', () => {
-    for (const template of [...Object.values(en), ...Object.values(es)]) {
+    for (const template of Object.values(en)) {
       const joined = splitTemplate(template)
         .map((part) => (part.kind === 'text' ? part.value : `{${part.name}}`))
         .join('');
@@ -109,21 +108,4 @@ describe('message with link positions', () => {
   });
 });
 
-describe('text of the rights card page', () => {
-  const slots = (template: string) =>
-    splitTemplate(template)
-      .flatMap((part) => (part.kind === 'slot' ? [part.name] : []))
-      .sort();
-
-  it('has the same link positions in Spanish as in English', () => {
-    for (const key of Object.keys(en) as Array<keyof typeof en>) expect([key, slots(es[key])]).toEqual([key, slots(en[key])]);
-  });
-
-  it('has a Spanish text for each key, and none is the placeholder', () => {
-    for (const key of Object.keys(en) as Array<keyof typeof en>) {
-      expect(es[key].trim()).not.toBe('');
-      expect(es[key]).not.toBe('Marcador');
-      expect(en[key]).not.toBe('Placeholder');
-    }
-  });
-});
+// The checks of the translated text (slots, numbers, no empty text) are in `messages.test.ts`, for each language.

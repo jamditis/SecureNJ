@@ -22,8 +22,9 @@ const sheet = {
   'sheet.removeListing': 'Remove listing {number}',
   'sheet.add': 'Add a listing',
   'sheet.addStarters': 'Add New Jersey starters',
-  'sheet.startersInEnglish':
-    'The New Jersey starters are in English, because the names and the numbers must be exact. You can change them after you add them. Material in Spanish:',
+  // Shown only when the language of the app is not English. A list of links follows it.
+  'sheet.startersNote':
+    'The names and the numbers of the New Jersey starters stay as they are, because they must be exact. You can change them after you add them. Material in other languages:',
   'sheet.spanishLink.ilrc': 'ILRC red cards',
   'sheet.spanishLink.nnirr': 'Hotline list of the National Network for Immigrant and Refugee Rights',
   'sheet.spanishLink.aclu': 'ACLU guide in Spanish',

@@ -138,6 +138,6 @@ describe('pickLocale', () => {
   it('uses English when no language matches or the saved value is not a language', () => {
     expect(pickLocale(null, ['fr-FR'])).toBe('en');
     expect(pickLocale('toString', [])).toBe('en');
-    expect(pickLocale('xx', ['pt-BR'])).toBe('en');
+    expect(pickLocale('xx', ['fr-CA'])).toBe('en');
   });
 });

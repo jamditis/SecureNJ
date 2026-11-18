@@ -55,7 +55,9 @@ Use this list before you ask for a review, and when you review.
 
 - [ ] `npm run check` passes.
 - [ ] Each changed behavior has a test. Each bug fix has a test that failed before the fix.
-- [ ] No user-visible text in components. New text is in `locales/en/` and `locales/es/`, in sentence case.
+- [ ] No user-visible text in components. New text is in `locales/en/`, in sentence case.
+- [ ] New or changed English text has a translation in each `locales/<code>.json`, and `npm run translate -- --lint` finds no fault. `npm run translate` lists the text with no translation.
+- [ ] Layout classes follow the text direction (`ms-`, `pe-`, `start-`, `text-start`). A field for a passphrase, a link, or a phone number has `dir="ltr"`.
 - [ ] Reference content in `content/` is not edited by hand, and its checksum test passes.
 - [ ] A sentence in `components/LimitsPage.tsx` or `docs/security.md` that the change makes false is corrected.
 - [ ] A new record type has a guard in `services/schema.ts`, and the tool reads it through `useRecords`.

@@ -4,7 +4,7 @@ import { makeTranslate } from './i18n';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 
 describe('makeTranslate', () => {
-  const t = makeTranslate(en);
+  const t = makeTranslate();
 
   it('returns the text for a key', () => {
     expect(t('common.cancel')).toBe('Cancel');

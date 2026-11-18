@@ -3,13 +3,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { AI_PROMPTS, RESOURCE_GROUPS, SOURCE_CODE_URL, SOURCE_DIGEST } from '../content/resources';
 import en from '../locales/en/infoPages';
-import es from '../locales/es/infoPages';
 import { TOOLS } from '../tools';
-import { LOCALES, makeTranslate, type MessageKey } from './i18n';
+import { makeTranslate, translationOf, type MessageKey } from './i18n';
 import { appAddress, copyText, flyerTools, parseRich, shareMessage } from './sharePage';
 
-const tEn = makeTranslate(LOCALES.en.messages);
-const tEs = makeTranslate(LOCALES.es.messages);
+const tEn = makeTranslate();
+const tEs = makeTranslate(translationOf('es'));
 const repoFile = (path: string) => new URL(`../${path}`, import.meta.url);
 
 /** The same structure as the script hashes when it reads the source. */
@@ -92,7 +91,6 @@ describe('reference content of the resources page', () => {
   it('has an English heading in the locale file that is the heading of the source', () => {
     for (const group of RESOURCE_GROUPS) {
       expect(en[`resources.group.${group.id}`]).toBe(group.heading);
-      expect(es[`resources.group.${group.id}`]).not.toBe('');
     }
   });
 });

@@ -105,13 +105,35 @@ Decisions from the owner (2026-11-18): "i dont want a person to start it", "auto
 
 The publish workflow can run only after the merge. Its first run is the first real test of the push to `gh-pages` and of the Pages build request.
 
-## Pull request 4 of this plan: automatic translation. Not started.
+## Pull request 4 of this plan: translations with no person step. In work.
 
 Decisions from the owner (2026-11-18):
 
 - Translate the legal and reference text too (rights card, family plan, resource text). This replaces "English text plus official links".
 - Add Portuguese (Brazil), Haitian Creole, Chinese (Simplified), and Arabic.
-- Translate new text in CI with LibreTranslate, which runs inside the workflow. No key and no outside service.
+- No translation engine. "we could just translate it ourselves": the agent that changes English text writes the translations in the same pull request. (This replaced a first choice of LibreTranslate in CI.)
+- Keep the machine translation note. No person review.
+
+Design:
+
+- English stays in `locales/en/*.ts` (UI) and `content/*.ts` (reference text).
+- Each other language is one file, `locales/<code>.json`, with a flat map from key to text. A key that is missing shows in English.
+- `locales/<code>.stamp.json` holds, for each key, a short hash of the English text at the time of the translation. A different hash means that the English text changed. The test suite fails on such a stale translation.
+- Reference text gets keys (`content.…`) through one function for each content file in `services/contentText.ts`. The same function gives the English text to the script and the translated text to the component.
+- A translated message is checked when the app starts: the slots and the numbers of the English text must be there. An entry that fails shows in English.
+- `scripts/translate.ts` lists missing translations, removes stale ones, and writes stamps. It does not translate.
+- Arabic is right to left: `dir="rtl"` on the page and on exported pages, and layout classes that follow the text direction.
+
+Steps:
+
+- [x] Language files as JSON, with fallback to English, and tests.
+- [x] Reference text with keys. Components show it in the language of the UI. The rights card can also show in English.
+- [x] Script for missing and stale translations, with tests.
+- [x] Translations: Spanish reference text; Portuguese and Chinese for all text.
+- [ ] Translations: Haitian Creole and Arabic for all text.
+- [ ] Right-to-left layout for Arabic, with an end-to-end check.
+- [x] Docs.
+- [ ] Review by independent agents.
 
 ## Known limits, not in either pull request
 

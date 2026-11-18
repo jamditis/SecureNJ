@@ -5,13 +5,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
 import { RIGHTS_CARD, RIGHTS_LINKS } from '../content/rightsCard';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor, translationOf } from '../services/i18n';
 import RightsCard from './RightsCard';
 
 afterEach(cleanup);
 
 const renderIn = (locale: 'en' | 'es', ui: ReactElement = <RightsCard />) =>
-  render(<I18nContext.Provider value={{ locale, t: makeTranslate(LOCALES[locale].messages), setLocale: () => {} }}>{ui}</I18nContext.Provider>);
+  render(<I18nContext.Provider value={i18nFor(locale)}>{ui}</I18nContext.Provider>);
 
 const card = (name = 'Printable rights card') => screen.getByRole('region', { name });
 const cardTexts = (element: HTMLElement, selector: string) => Array.from(element.querySelectorAll(selector), (node) => node.textContent);
@@ -147,7 +147,22 @@ describe('know your rights card', () => {
 });
 
 describe('know your rights card in Spanish', () => {
-  it('keeps the card in English, with the same text as in English mode', async () => {
+  const es = translationOf('es');
+
+  it('shows the card in Spanish, with the sentences to say to an agent in English', () => {
+    renderIn('es');
+    const spanish = card('Tarjeta de derechos para imprimir');
+    expect(cardTexts(spanish, 'h3')).toEqual(['Conoce tus derechos']);
+    const items = cardTexts(spanish, 'li');
+    expect(items).toHaveLength(CARD_ITEMS.length);
+    items.forEach((item, index) => expect(item).not.toBe(CARD_ITEMS[index]));
+    expect(items).toContain('Di: "I do not consent to your entry." (No doy mi consentimiento para que entren.)');
+    expect(cardTexts(spanish, 'dt')).toEqual([es['content.rights.label.hotline']]);
+    // The card has the language of the page.
+    expect(spanish.getAttribute('lang')).toBeNull();
+  });
+
+  it('shows and prints the English card, with the same text as in English mode, when the person asks', async () => {
     const user = userEvent.setup();
     renderIn('en');
     await user.type(screen.getByLabelText('Emergency contact phone (optional)'), '555-0101');
@@ -156,23 +171,29 @@ describe('know your rights card in Spanish', () => {
 
     renderIn('es');
     await user.type(screen.getByLabelText('Teléfono de tu contacto de emergencia (opcional)'), '555-0101');
-    const spanish = card('Tarjeta de derechos para imprimir');
+    await user.click(screen.getByRole('checkbox', { name: 'Mostrar la tarjeta en inglés' }));
+    const shown = card('Tarjeta de derechos para imprimir');
     // The field IDs are not in the card, so the two cards must be the same markup.
-    expect(spanish.innerHTML).toBe(english);
-    expect(cardTexts(spanish, 'li')).toEqual(CARD_ITEMS);
-    expect(cardTexts(spanish, 'dt')).toEqual(['Hotline', 'Emergency contact']);
-    // Screen readers then read the card with an English voice.
-    expect(spanish.getAttribute('lang')).toBe('en');
+    expect(shown.innerHTML).toBe(english);
+    expect(cardTexts(shown, 'li')).toEqual(CARD_ITEMS);
+    // Screen readers then read the card with an English voice, and it stays left to right.
+    expect(shown.getAttribute('lang')).toBe('en');
+    expect(shown.getAttribute('dir')).toBe('ltr');
   });
 
-  it('says that the card text is in English and links to the official Spanish cards', () => {
+  it('has no choice of an English card in English', () => {
+    renderIn('en');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(card().getAttribute('lang')).toBe('en');
+  });
+
+  it('says that the card text is a machine translation and links to the official cards', () => {
     renderIn('es');
-    const notice = screen.getByText(/El texto de la tarjeta está solo en inglés/);
-    expect(notice.textContent).toBe(
-      'El texto de la tarjeta está solo en inglés. Para una tarjeta oficial en español, usa las tarjetas rojas del ILRC o la guía de la ACLU en español.',
+    const notice = screen.getByText(/El texto de la tarjeta es una traducción automática/);
+    expect(notice.textContent).toContain(
+      'El texto de la tarjeta es una traducción automática. Un abogado(a) no lo ha revisado. Para una tarjeta oficial en muchos idiomas, usa las tarjetas rojas del ILRC.',
     );
     expect(within(notice).getByRole('link', { name: 'tarjetas rojas del ILRC' }).getAttribute('href')).toBe(RIGHTS_LINKS.ilrcRedCards);
-    expect(within(notice).getByRole('link', { name: 'guía de la ACLU en español' }).getAttribute('href')).toBe(RIGHTS_LINKS.acluGuideSpanish);
     // The notice is for the screen, not for the printed card.
     expect(notice.closest('.no-print')).not.toBeNull();
   });

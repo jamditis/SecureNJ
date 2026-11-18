@@ -5,7 +5,8 @@
  * links with their notes, the AI prompts, and the address of the source code.
  * A script copied each string from the record of the old build
  * (content-verbatim.json, bundle index-BhtmjXkj.js), so that no address was
- * typed again. The names, the notes, and the prompts are not translated.
+ * typed again. The names of the links are not translated. The notes and the
+ * prompts are (see `services/contentText.ts`).
  *
  * The AI prompts are text that a visitor copies into a chatbot. For this app
  * they are data: the app shows them and copies them, and nothing more.

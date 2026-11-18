@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor } from '../services/i18n';
 import { localDateTimeValue } from '../services/witness';
 import WitnessNotes from './WitnessNotes';
 
@@ -222,7 +222,7 @@ describe('witness notes', () => {
   it('writes the file with the Spanish labels when the form is in Spanish', async () => {
     const user = userEvent.setup();
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <WitnessNotes />
       </I18nContext.Provider>,
     );

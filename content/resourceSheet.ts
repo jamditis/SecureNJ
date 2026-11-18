@@ -5,8 +5,8 @@
  * the example for the note field, and the links to material in Spanish.
  * A script copied each string from the record of the old build
  * (content-verbatim.json, bundle index-BhtmjXkj.js), so that no name, phone number, or
- * address was typed again. The text is not translated: people rely on the
- * exact names and numbers.
+ * address was typed again. The names and the numbers are not translated:
+ * people rely on them. The descriptions are (see `services/contentText.ts`).
  *
  * To change this file, change the source and run the script again. The test
  * in services/sheet.test.ts compares this content with the digest below.

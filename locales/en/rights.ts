@@ -1,6 +1,6 @@
 /**
  * English text for the page around the know-your-rights card. The text of the
- * card itself is in `content/rightsCard.ts`: it is not translated.
+ * card itself is in `content/rightsCard.ts`.
  * A name in braces, for example {link}, is the position of a link or a name.
  */
 const rights = {
@@ -10,9 +10,10 @@ const rights = {
   'rights.notice':
     "This is general information from the {guide} (updated August 4, 2026), not legal advice. A lawyer hasn't reviewed this short version. For anything you plan to hand out, use an official card from the list below. Rules differ by situation and status, and they can change, so ask an immigration lawyer about your case.",
   'rights.notice.guide': "ACLU's guide",
-  'rights.englishOnly': 'The card text is in English only. For an official card in Spanish, use the {ilrc} or the {aclu}.',
-  'rights.englishOnly.ilrc': 'ILRC red cards',
-  'rights.englishOnly.aclu': 'ACLU guide in Spanish',
+  // Shown only when the language of the app is not English.
+  'rights.translated': "The card text is a machine translation. A lawyer hasn't reviewed it. For an official card in many languages, use the {ilrc}.",
+  'rights.translated.ilrc': 'ILRC red cards',
+  'rights.showEnglish': 'Show the card in English',
   'rights.field.hotline': 'Rapid response hotline',
   'rights.hint.hotline': 'This is the {name} number, as listed by the {source}. Call it to confirm before you print or share it.',
   'rights.field.lawyer': 'Your lawyer or legal group (optional)',

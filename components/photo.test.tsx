@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadBlob } from '../services/download';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor, translationOf } from '../services/i18n';
 import PhotoCleaner from './PhotoCleaner';
 
 vi.mock('../services/download', () => ({ downloadBlob: vi.fn() }));
@@ -308,7 +308,7 @@ describe('photo cleaner', () => {
   });
 
   it('shows its text in Spanish', () => {
-    const value = { locale: 'es' as const, t: makeTranslate(LOCALES.es.messages), setLocale: () => {} };
+    const value = i18nFor('es');
     render(
       <I18nContext.Provider value={value}>
         <PhotoCleaner />
@@ -316,6 +316,6 @@ describe('photo cleaner', () => {
     );
     expect(screen.getByLabelText('Elige una foto')).toBeTruthy();
     expect(screen.getByText('Lo que esto no puede hacer')).toBeTruthy();
-    expect(LOCALES.es.messages['photo.saved']).toContain('{name}');
+    expect(translationOf('es')['photo.saved']).toContain('{name}');
   });
 });

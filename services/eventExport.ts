@@ -7,6 +7,10 @@
 import { KDF_ITERATIONS } from './crypto';
 
 export interface EventPageLabels {
+  /** The `lang` value of the language of the labels, for example "pt-BR" (`LOCALES[locale].htmlLang`). */
+  lang: string;
+  /** The direction of the language of the labels (`LOCALES[locale].dir`). */
+  dir: 'ltr' | 'rtl';
   pageTitle: string;
   prompt: string;
   passphrase: string;
@@ -49,6 +53,10 @@ button:disabled{opacity:.6;cursor:wait}
 [hidden]{display:none}
 @media print{body{background:#fff;color:#000}main{border:0}h2{color:#000}.plain{display:none}}
 `;
+
+// The text of the event can be in a different language than the labels, so
+// each value takes its own direction (dir="auto"). The passphrase is always
+// left to right.
 
 // This script runs in the exported page, not in the app. Keep it free of
 // dependencies. It sets text with textContent only.
@@ -111,13 +119,14 @@ export function buildEventPage(encryptedPayload: string, labels: EventPageLabels
   if (!PAYLOAD_FORMAT.test(encryptedPayload)) {
     throw new Error('The payload is not encrypted text in the version 2 format.');
   }
+  const dir = labels.dir === 'rtl' ? 'rtl' : 'ltr';
   const l = Object.fromEntries(Object.entries(labels).map(([key, text]) => [key, escapeHtml(text)])) as unknown as EventPageLabels;
   // JSON.stringify gives a safe JavaScript string. "<" is escaped so that a
   // label cannot close the script element.
   const js = (text: string) => JSON.stringify(text).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${l.lang}" dir="${dir}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -131,20 +140,20 @@ export function buildEventPage(encryptedPayload: string, labels: EventPageLabels
 <form id="unlock">
 <h1>${l.pageTitle}</h1>
 <p class="muted">${l.prompt}</p>
-<input type="password" id="passphrase" aria-label="${l.passphrase}" placeholder="${l.passphrase}" autocomplete="off" required>
+<input type="password" id="passphrase" dir="ltr" aria-label="${l.passphrase}" placeholder="${l.passphrase}" autocomplete="off" required>
 <button type="submit" id="unlock-button">${l.unlock}</button>
 <p id="error" class="error" hidden>${l.wrong}</p>
 </form>
 <div id="details" hidden>
-<h2 id="view-title"></h2>
-<p id="view-date" class="date"></p>
+<h2 id="view-title" dir="auto"></h2>
+<p id="view-date" dir="auto" class="date"></p>
 <span class="label">${l.location}</span>
-<p id="view-location" class="value"></p>
+<p id="view-location" dir="auto" class="value"></p>
 <span class="label">${l.description}</span>
-<p id="view-description" class="value"></p>
+<p id="view-description" dir="auto" class="value"></p>
 <div class="safety">
 <span class="label">${l.safety}</span>
-<p id="view-safety" class="value"></p>
+<p id="view-safety" dir="auto" class="value"></p>
 </div>
 <button type="button" id="print" class="plain">${l.print}</button>
 </div>

@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import en from '../locales/en/index';
-import es from '../locales/es/index';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor } from '../services/i18n';
 import { hasUnsavedWork, useUnsavedWork } from '../services/unsaved';
 import { TOOLS, readRoute } from '../tools';
 import LanguageSwitch from './LanguageSwitch';
@@ -23,7 +21,7 @@ describe('page about limits', () => {
     cleanup();
 
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <LimitsPage />
       </I18nContext.Provider>,
     );
@@ -34,7 +32,7 @@ describe('page about limits', () => {
 
 describe('language switch', () => {
   const inSpanish = (ui: React.ReactElement) => (
-    <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>{ui}</I18nContext.Provider>
+    <I18nContext.Provider value={i18nFor('es')}>{ui}</I18nContext.Provider>
   );
 
   it('tells a reader of the Spanish text that a machine made it and that no person reviewed it', () => {
@@ -49,18 +47,6 @@ describe('language switch', () => {
     render(<LanguageSwitch />);
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByLabelText('Language')).toBeTruthy();
-  });
-});
-
-describe('text in two languages', () => {
-  it('has the same placeholders in each Spanish message as in the English message', () => {
-    const placeholders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(',');
-    const different = (Object.keys(en) as (keyof typeof en)[]).filter((key) => placeholders(en[key]) !== placeholders(es[key]));
-    expect(different).toEqual([]);
-  });
-
-  it('has no empty Spanish message', () => {
-    expect(Object.entries(es).filter(([, text]) => text.trim() === '')).toEqual([]);
   });
 });
 

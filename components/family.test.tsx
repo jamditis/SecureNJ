@@ -6,7 +6,7 @@ import { FIRST_STEPS, PLAN_SECTIONS } from '../content/familyPlan';
 import { decryptText, encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { lockPlan } from '../services/family';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor, translationOf } from '../services/i18n';
 import FamilyPlan from './FamilyPlan';
 
 vi.mock('../services/download', () => ({ downloadBlob: vi.fn() }));
@@ -339,32 +339,34 @@ describe('family plan: print', () => {
 });
 
 describe('family plan: Spanish', () => {
+  const es = translationOf('es');
   const renderSpanish = () =>
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <FamilyPlan />
       </I18nContext.Provider>,
     );
 
-  it('keeps the questions and the first steps in English, marks them as English, and says so with links to material in Spanish', () => {
+  it('shows the questions and the first steps in Spanish, and says that they are a machine translation', () => {
     renderSpanish();
     expect(screen.getByRole('heading', { name: /^Plan familiar de emergencia/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Guardar archivo bloqueado' })).toBeTruthy();
 
-    const notice = screen.getByText(/^Los primeros pasos y las preguntas del plan están en inglés\./);
+    const notice = screen.getByText(/^Los primeros pasos y las preguntas del plan son una traducción automática\./);
     const links = within(notice.parentElement as HTMLElement).getAllByRole<HTMLAnchorElement>('link');
     expect(links.map((link) => [link.textContent, link.href])).toEqual([
-      ['ILRC red cards', 'https://www.ilrc.org/red-cards-tarjetas-rojas'],
-      ['NJ Office of New Americans', 'https://nj.gov/humanservices/njnewamericans/rights/rights/'],
-      ['ACLU guide in Spanish', 'https://www.aclu.org/files/kyr/MKG17-KYR-PoliceImmigrationFBI-OnePager-Spanish-v01.pdf'],
+      ['Tarjetas rojas del ILRC', 'https://www.ilrc.org/red-cards-tarjetas-rojas'],
+      [es['content.family.languageLink1'], 'https://nj.gov/humanservices/njnewamericans/rights/rights/'],
+      ['Guía de la ACLU en español', 'https://www.aclu.org/files/kyr/MKG17-KYR-PoliceImmigrationFBI-OnePager-Spanish-v01.pdf'],
     ]);
 
-    expect(screen.getByText(FIRST_STEPS[0]).closest('[lang]')?.getAttribute('lang')).toBe('en');
+    expect(screen.getByText('Elige quién va a cuidar a tus hijos y habla con esa persona ahora.')).toBeTruthy();
+    expect(screen.queryByText(FIRST_STEPS[0])).toBeNull();
     for (const item of ITEMS) {
-      const control = field(item.label);
-      expect(document.querySelector(`label[for="${control.id}"]`)?.getAttribute('lang')).toBe('en');
-      // An answer can be in any language.
-      expect(control.closest('[lang]')).toBeNull();
+      const label = es[`content.family.${item.id}.label`] as string;
+      expect(label).not.toBe(item.label);
+      // The text is in the language of the page, and an answer can be in any language.
+      expect(field(label).closest('[lang]')).toBeNull();
     }
   });
 
@@ -376,7 +378,7 @@ describe('family plan: Spanish', () => {
   it('saves and opens the same file as the English form', async () => {
     const user = userEvent.setup();
     renderSpanish();
-    await user.type(field('Consulate phone'), '555-0199');
+    await user.type(field('Teléfono del consulado'), '555-0199');
     await user.type(screen.getByLabelText(/^Frase de contraseña para guardar/), PASSPHRASE);
     await user.click(screen.getByRole('button', { name: 'Guardar archivo bloqueado' }));
     expect((await screen.findByRole('status')).textContent).toBe('Guardado como family-plan.locked.txt.');

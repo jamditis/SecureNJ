@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { base64ToBytes, bytesToBase64, decryptBytes, encryptBytes, encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
-import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
+import { I18nContext, i18nFor } from '../services/i18n';
 import { packFile } from '../services/lockedFile';
 import LockFile from './LockFile';
 import SecureShare from './SecureShare';
@@ -285,7 +285,7 @@ describe('lock a file', () => {
   it('writes the locked file in the language of the app', async () => {
     const user = userEvent.setup();
     render(
-      <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>
+      <I18nContext.Provider value={i18nFor('es')}>
         <LockFile />
       </I18nContext.Provider>,
     );
@@ -295,8 +295,29 @@ describe('lock a file', () => {
     await user.click(screen.getByRole('button', { name: 'Bloquear y guardar' }));
     await screen.findByRole('status', undefined, WAIT);
     const html = await saved.mock.calls[0][0].text();
-    expect(html).toContain('<html lang="es">');
+    expect(html).toContain('<html lang="es" dir="ltr">');
     expect(html).toContain('<title>Archivo bloqueado</title>');
+  });
+
+  // These selectors do not use text, so the test does not depend on how much of each language file is done.
+  it.each([
+    ['pt', '<html lang="pt-BR" dir="ltr">'],
+    ['zh', '<html lang="zh-Hans" dir="ltr">'],
+    ['ar', '<html lang="ar" dir="rtl">'],
+  ] as const)('gives the locked file the language tag and the direction of %s', async (locale, start) => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <I18nContext.Provider value={i18nFor(locale)}>
+        <LockFile />
+      </I18nContext.Provider>,
+    );
+    await user.upload(container.querySelector<HTMLInputElement>('input[type="file"]')!, notes());
+    await user.click(container.querySelector<HTMLInputElement>('input[type="password"]')!);
+    await user.paste(PASSPHRASE);
+    await user.click(container.querySelector<HTMLButtonElement>('button[type="submit"]')!);
+    await screen.findByRole('status', undefined, WAIT);
+    const html = await saved.mock.calls[0][0].text();
+    expect(html).toContain(start);
   });
 
   it('saves nothing with no file, with a file over 25 MB, or with a weak passphrase', async () => {

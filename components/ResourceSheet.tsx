@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Copy, Plus, Printer, Trash2 } from 'lucide-react';
-import { NOTE_EXAMPLE, SPANISH_LINKS, STARTER_LISTINGS } from '../content/resourceSheet';
-import { useLocale, useT } from '../services/i18n';
+import { SPANISH_LINKS } from '../content/resourceSheet';
+import { resourceSheetText } from '../services/contentText';
+import { useContentText, useLocale, useT } from '../services/i18n';
 import {
   addStarters,
   browserStorage,
@@ -41,6 +42,8 @@ function Contact({ value }: { value: string }) {
 export default function ResourceSheet() {
   const t = useT();
   const locale = useLocale();
+  const content = useContentText();
+  const text = useMemo(() => resourceSheetText(content), [content]);
   const [initial] = useState(() => {
     const draft = loadDraft(browserStorage(), t('sheet.defaultTitle'));
     return { keepDraft: draft !== null, sheet: draft ?? { title: t('sheet.defaultTitle'), note: '', entries: [emptyListing()] } };
@@ -82,7 +85,7 @@ export default function ResourceSheet() {
             <input value={sheet.title} onChange={(event) => apply({ ...sheet, title: event.target.value })} className={inputClass} />
           </Field>
           <Field label={t('sheet.field.note')}>
-            <input value={sheet.note} placeholder={NOTE_EXAMPLE} onChange={(event) => apply({ ...sheet, note: event.target.value })} className={inputClass} />
+            <input value={sheet.note} placeholder={text.noteExample} onChange={(event) => apply({ ...sheet, note: event.target.value })} className={inputClass} />
           </Field>
         </div>
 
@@ -116,14 +119,14 @@ export default function ResourceSheet() {
             <Button variant="light" onClick={() => apply({ ...sheet, entries: [...sheet.entries, emptyListing()] })}>
               <Plus className="w-5 h-5" aria-hidden="true" /> {t('sheet.add')}
             </Button>
-            <Button variant="light" onClick={() => apply({ ...sheet, entries: addStarters(sheet.entries, STARTER_LISTINGS) })}>
+            <Button variant="light" onClick={() => apply({ ...sheet, entries: addStarters(sheet.entries, text.starters) })}>
               {t('sheet.addStarters')}
             </Button>
           </div>
 
           {locale !== 'en' && (
             <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
-              <p>{t('sheet.startersInEnglish')}</p>
+              <p>{t('sheet.startersNote')}</p>
               <ul className="list-disc pl-5">
                 {SPANISH_LINKS.map((link) => (
                   <li key={link.id}>

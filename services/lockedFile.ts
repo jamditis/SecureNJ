@@ -19,8 +19,10 @@ export const MAX_LOCKED_FILE_BYTES = MAX_LOCKED_FILE_MB * 1024 * 1024;
 export const LOCKED_FILE_NAME = 'locked-file.html';
 
 export interface LockedFilePageLabels {
-  /** The language code of the labels, for example "en". */
+  /** The `lang` value of the language of the labels, for example "pt-BR" (`LOCALES[locale].htmlLang`). */
   lang: string;
+  /** The direction of the language of the labels (`LOCALES[locale].dir`). */
+  dir: 'ltr' | 'rtl';
   pageTitle: string;
   prompt: string;
   passphrase: string;
@@ -145,13 +147,14 @@ export function buildLockedFilePage(payload: string, labels: LockedFilePageLabel
   if (!PAYLOAD_FORMAT.test(payload)) {
     throw new Error('The payload is not base64 text.');
   }
+  const dir = labels.dir === 'rtl' ? 'rtl' : 'ltr';
   const l = Object.fromEntries(Object.entries(labels).map(([key, text]) => [key, escapeHtml(text)])) as unknown as LockedFilePageLabels;
   // JSON.stringify gives a safe JavaScript string. "<" is escaped so that a
   // label cannot close the script element.
   const js = (text: string) => JSON.stringify(text).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
-<html lang="${l.lang}">
+<html lang="${l.lang}" dir="${dir}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -166,11 +169,11 @@ export function buildLockedFilePage(payload: string, labels: LockedFilePageLabel
 <form id="unlock">
 <h1>${l.pageTitle}</h1>
 <p class="muted">${l.prompt}</p>
-<input type="password" id="passphrase" aria-label="${l.passphrase}" placeholder="${l.passphrase}" autocomplete="off" required>
+<input type="password" id="passphrase" dir="ltr" aria-label="${l.passphrase}" placeholder="${l.passphrase}" autocomplete="off" required>
 <button type="submit" id="unlock-button">${l.unlock}</button>
 </form>
 <p id="error" class="error" role="alert" hidden>${l.wrong}</p>
-<p id="done" class="done" role="status"></p>
+<p id="done" class="done" role="status" dir="auto"></p>
 </main>
 <script>
 var PAYLOAD = ${js(payload)};

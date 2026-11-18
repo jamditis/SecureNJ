@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AI_PROMPTS, RESOURCE_GROUPS, SOURCE_CODE_URL } from '../content/resources';
-import { I18nContext, LOCALES, makeTranslate, type Locale } from '../services/i18n';
+import { I18nContext, i18nFor, makeTranslate, translationOf, type Locale } from '../services/i18n';
 import ResourcesPage from './ResourcesPage';
 import SharePage from './SharePage';
 
@@ -17,7 +17,7 @@ vi.mock('../services/sharePage', async (importOriginal) => {
 });
 
 const renderIn = (locale: Locale, ui: ReactElement) =>
-  render(<I18nContext.Provider value={{ locale, t: makeTranslate(LOCALES[locale].messages), setLocale: () => {} }}>{ui}</I18nContext.Provider>);
+  render(<I18nContext.Provider value={i18nFor(locale)}>{ui}</I18nContext.Provider>);
 
 const ADDRESS = 'http://localhost:3000/toolkit/';
 
@@ -95,24 +95,32 @@ describe('resources page', () => {
 
   it('shows no notice about English in English', () => {
     render(<ResourcesPage />);
-    expect(screen.queryByText(LOCALES.en.messages['resources.englishNotice'])).toBeNull();
+    expect(screen.queryByText(makeTranslate()('resources.namesNotice'))).toBeNull();
   });
 
-  it('in Spanish, has Spanish headings and buttons, keeps the links and the prompts in English, and says so', () => {
+  it('in Spanish, has the notes and the prompts in Spanish, and keeps the name of each link in English', async () => {
+    const es = translationOf('es');
+    const user = userEvent.setup();
     renderIn('es', <ResourcesPage />);
     expect(screen.getByRole('heading', { level: 2, name: 'Recursos' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: 'Conoce tus derechos' })).toBeTruthy();
-    expect(screen.getByText('Los nombres y las notas de los enlaces, y las instrucciones para IA, están en inglés.')).toBeTruthy();
+    expect(screen.getByText('Los nombres de los enlaces están en inglés, para que puedas encontrar el mismo nombre en la página que se abre.')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Copiar la instrucción' })).toHaveLength(6);
 
     const item = RESOURCE_GROUPS[0].items[0];
     const link = screen.getByRole('link', { name: `${item.name} (se abre en una pestaña nueva)` });
     expect(link.getAttribute('href')).toBe(item.url);
-    // A screen reader reads the English text with an English voice.
+    // A screen reader reads the English name with an English voice.
     expect(within(link).getByText(item.name).getAttribute('lang')).toBe('en');
-    expect(screen.getByText(item.note).getAttribute('lang')).toBe('en');
-    expect(screen.getByText(AI_PROMPTS[0].text).getAttribute('lang')).toBe('en');
-    expect(screen.getByRole('article', { name: AI_PROMPTS[0].title })).toBeTruthy();
+    expect(screen.getByText('Mensajes y llamadas cifrados. Úsalo primero para todo lo delicado, y activa los mensajes temporales.')).toBeTruthy();
+    expect(screen.queryByText(item.note)).toBeNull();
+
+    // The prompt that the visitor copies is the Spanish text.
+    const card = screen.getByRole('article', { name: 'De notas de reunión a lista de tareas' });
+    await user.click(within(card).getByRole('button', { name: 'Copiar la instrucción' }));
+    const copied = await navigator.clipboard.readText();
+    expect(copied).toBe(es['content.resources.prompt0.text']);
+    expect(copied).not.toBe(AI_PROMPTS[0].text);
   });
 });
 
@@ -151,7 +159,7 @@ describe('share page', () => {
     expect(within(flyer).getByText(ADDRESS)).toBeTruthy();
     expect(within(flyer).getByRole('img', { name: `QR code for ${ADDRESS}` })).toBeTruthy();
 
-    const t = makeTranslate(LOCALES.en.messages);
+    const t = makeTranslate();
     const lines = within(flyer).getAllByRole('listitem').map((item) => item.textContent);
     expect(lines).toEqual([
       `${t('lock.messageTitle')}: send something sensitive over email, text, or a USB drive.`,

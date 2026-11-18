@@ -1,16 +1,7 @@
-import { Fragment, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { FolderOpen, Lock, Printer } from 'lucide-react';
-import {
-  DEFAULT_ANSWERS,
-  FIRST_STEPS,
-  HOTLINE_ITEM_ID,
-  HOTLINE_NOTE,
-  LANGUAGE_LINKS,
-  LEARN_MORE,
-  PLAN_SECTIONS,
-  type NotePart,
-  type PlanItem,
-} from '../content/familyPlan';
+import { DEFAULT_ANSWERS, HOTLINE_ITEM_ID, type NotePart, type PlanItem } from '../content/familyPlan';
+import { familyPlanText } from '../services/contentText';
 import { downloadBlob } from '../services/download';
 import {
   MAX_PLAN_FILE_BYTES,
@@ -22,7 +13,7 @@ import {
   unlockPlan,
   type PlanAnswers,
 } from '../services/family';
-import { useLocale, useT, type MessageKey } from '../services/i18n';
+import { useContentText, useLocale, useT, type MessageKey } from '../services/i18n';
 import { passphraseProblem } from '../services/passphrase';
 import { useUnsavedWork } from '../services/unsaved';
 import { Button, Field, Modal, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
@@ -44,8 +35,8 @@ function NoteText({ parts }: { parts: readonly NotePart[] }) {
 }
 
 /** The hotline note names the default number, so it shows only while the answer is that number. */
-function hintOf(item: PlanItem, answer: string): ReactNode {
-  if (item.id === HOTLINE_ITEM_ID) return answer === DEFAULT_ANSWERS[HOTLINE_ITEM_ID] ? <NoteText parts={HOTLINE_NOTE} /> : null;
+function hintOf(item: PlanItem, answer: string, hotlineNote: readonly NotePart[]): ReactNode {
+  if (item.id === HOTLINE_ITEM_ID) return answer === DEFAULT_ANSWERS[HOTLINE_ITEM_ID] ? <NoteText parts={hotlineNote} /> : null;
   return item.hint ?? null;
 }
 
@@ -95,6 +86,8 @@ function OpenDialog({ onSubmit, onClose }: OpenDialogProps) {
 export default function FamilyPlan() {
   const t = useT();
   const locale = useLocale();
+  const content = useContentText();
+  const text = useMemo(() => familyPlanText(content), [content]);
   const [plan, setPlan] = useState<PlanAnswers>(newPlan);
   // The plan as it was at the start, at the last save, or at the last open. A change gives a new object.
   const [kept, setKept] = useState<PlanAnswers>(plan);
@@ -168,10 +161,10 @@ export default function FamilyPlan() {
         <Notice tone="warning">{t('family.notice')}</Notice>
         {locale !== 'en' && (
           <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
-            <p>{t('family.englishNotice')}</p>
+            <p>{t('family.translatedNotice')}</p>
             <ul className="list-disc pl-5">
-              {LANGUAGE_LINKS.map((link) => (
-                <li key={link.href} lang="en">
+              {text.languageLinks.map((link) => (
+                <li key={link.href}>
                   <OutsideLink {...link} />
                 </li>
               ))}
@@ -181,28 +174,28 @@ export default function FamilyPlan() {
 
         <section className={CARD_CLASS}>
           <h3 className="font-bold text-slate-900 text-lg">{t('family.firstSteps')}</h3>
-          <ol lang="en" className="list-decimal pl-5 space-y-1.5 text-sm text-slate-700">
-            {FIRST_STEPS.map((step) => (
+          <ol className="list-decimal pl-5 space-y-1.5 text-sm text-slate-700">
+            {text.firstSteps.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
-          <p lang="en" className="text-xs text-slate-500 leading-relaxed">
-            <NoteText parts={LEARN_MORE} />
+          <p className="text-xs text-slate-500 leading-relaxed">
+            <NoteText parts={text.learnMore} />
           </p>
         </section>
       </div>
 
       <div className="space-y-6">
         <h3 className="hidden print:block text-2xl font-bold text-black">{t('family.printTitle')}</h3>
-        {PLAN_SECTIONS.map((section) => (
+        {text.sections.map((section) => (
           <section key={section.section} className={`${CARD_CLASS} print:border-0 print:p-0 print:rounded-none`}>
-            <h3 lang="en" className="font-bold text-slate-900 text-lg print:text-black print:break-after-avoid">
+            <h3 className="font-bold text-slate-900 text-lg print:text-black print:break-after-avoid">
               {section.section}
             </h3>
             {section.items.map((item) => {
               const id = `fp-${item.id}`;
               const answer = plan[item.id] ?? '';
-              const hint = hintOf(item, answer);
+              const hint = hintOf(item, answer, text.hotlineNote);
               const control = {
                 id,
                 value: answer,
@@ -215,11 +208,11 @@ export default function FamilyPlan() {
               };
               return (
                 <div key={item.id} className="space-y-1.5 print:break-inside-avoid">
-                  <label htmlFor={id} lang="en" className="block text-sm font-bold text-slate-700 print:text-black">
+                  <label htmlFor={id} className="block text-sm font-bold text-slate-700 print:text-black">
                     {item.label}
                   </label>
                   {hint && (
-                    <p id={`${id}-hint`} lang="en" className="no-print text-xs text-slate-500 leading-relaxed">
+                    <p id={`${id}-hint`} className="no-print text-xs text-slate-500 leading-relaxed">
                       {hint}
                     </p>
                   )}

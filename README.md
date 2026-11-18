@@ -34,7 +34,7 @@ Work as a group (each tool has its own room):
 - **Shift roster**: shifts with sign-up. Shows the shifts that still need people.
 - **Supply inventory**: stock, location, and low-stock flags.
 
-The app is in English and Spanish. It opens with no connection after the first visit.
+The app is in English, Spanish, Portuguese (Brazil), Haitian Creole, Chinese (Simplified), and Arabic. English is the source text. Each other language is a machine translation that no person reviewed, and the app says so. It opens with no connection after the first visit.
 
 ## How it works
 
