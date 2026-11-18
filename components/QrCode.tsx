@@ -6,7 +6,12 @@ export default function QrCode({ text, label }: { text: string; label: string })
   const cells = useMemo(() => {
     const code = qrcode(0, 'M');
     code.addData(text);
-    code.make();
+    try {
+      code.make();
+    } catch {
+      // The text is too long for a QR code.
+      return null;
+    }
     const size = code.getModuleCount();
     const dark: [number, number][] = [];
     for (let row = 0; row < size; row += 1) {
@@ -17,6 +22,7 @@ export default function QrCode({ text, label }: { text: string; label: string })
     return { size, dark };
   }, [text]);
 
+  if (!cells) return null;
   // A QR code needs a light margin of four cells to scan.
   const margin = 4;
   const total = cells.size + margin * 2;

@@ -51,6 +51,7 @@ const structure: Record<keyof typeof en, string> = {
   'limits.habit.2': "No pongas nombres, direcciones, números de caso ni detalles migratorios o médicos, a menos que la herramienta los necesite. Los datos de otras personas merecen el mismo cuidado que los tuyos.",
   'limits.habit.3': "Usa palabras clave acordadas para las alertas. Reducen lo que revela un mensaje, pero no ocultan quién contactó a quién ni cuándo. No envíes detalles que no querrías que se leyeran en voz alta.",
   'limits.habit.4': "Ten una cadena telefónica impresa. Los celulares se descargan, las redes se caen y el papel sigue funcionando. Guárdala con el mismo cuidado que el archivo.",
+  'limits.habit.5': "Si el navegador ofrece guardar una frase de contraseña, di que no. Una frase guardada puede ir a una cuenta en la nube.",
 };
 
 export default structure;

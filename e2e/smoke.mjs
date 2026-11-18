@@ -266,9 +266,21 @@ async function main() {
     await viewer.getByRole('button', { name: 'Unlock' }).click();
     await viewer.getByRole('heading', { name: 'Know your rights night' }).waitFor({ timeout: 15_000 });
 
+    console.log('6a. Notes that are not saved are not lost through the back button without a question');
+    await openTool(ana, 'Witness notes');
+    await ana.locator('main textarea').first().fill('Two agents at the door at 6 AM');
+    ana.once('dialog', (dialog) => dialog.dismiss());
+    await ana.goBack();
+    await ana.waitForTimeout(500);
+    assert.equal(await ana.locator('main textarea').first().inputValue(), 'Two agents at the door at 6 AM', 'the notes must stay when the person answers no');
+    ana.once('dialog', (dialog) => dialog.accept());
+    await ana.goBack();
+    await ana.getByRole('heading', { name: 'Event coordinator', level: 2 }).waitFor();
+
     console.log('6b. An invite link fills in the group, and the new member needs only the passphrase');
     await openTool(ben, 'Safety alerts');
     await ben.getByRole('button', { name: 'Room settings' }).click();
+    assert.equal(await ben.getByRole('button', { name: 'Save a backup' }).count(), 0, 'safety alerts must have no backup, which would write them to the device');
     const inviteLink = await ben.getByLabel('Invite link').inputValue();
     assert.ok(!inviteLink.includes('horse'), 'the invite must not hold the passphrase');
     await ben.getByRole('img', { name: 'Code for the camera of a phone' }).waitFor();

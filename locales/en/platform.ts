@@ -13,7 +13,7 @@ const platform = {
   'device.restored': 'The backup is added.',
   'device.notBackup': 'The file is not a backup of a space.',
   'device.eraseTitle': 'Erase this device',
-  'device.eraseNote': 'This deletes all data of the app from this browser: all tools, the phone tree, the saved space and its passphrase, and the offline copy of the app. Other members keep their copies of a space. You cannot undo this.',
+  'device.eraseNote': "This deletes all data of the app from this browser: all tools, the phone tree, the data of each room, and the offline copy of the app. Other members keep their copies. You cannot undo this.",
   'device.erase': 'Erase all data',
   'device.eraseConfirm': 'Erase now. I cannot undo this.',
 

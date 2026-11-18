@@ -15,7 +15,7 @@ const platform: Record<keyof typeof en, string> = {
   'device.restored': 'La copia se agregó.',
   'device.notBackup': 'El archivo no es una copia de seguridad de un espacio.',
   'device.eraseTitle': 'Borrar este dispositivo',
-  'device.eraseNote': 'Esto borra de este navegador todos los datos de la aplicación: todas las herramientas, la cadena telefónica, el espacio guardado con su frase de contraseña y la copia sin conexión de la aplicación. Los demás miembros conservan sus copias del espacio. No se puede deshacer.',
+  'device.eraseNote': "Esto borra de este navegador todos los datos de la aplicación: todas las herramientas, la cadena telefónica, los datos de cada sala y la copia sin conexión de la aplicación. Los demás miembros conservan sus copias. No se puede deshacer.",
   'device.erase': 'Borrar todos los datos',
   'device.eraseConfirm': 'Borrar ahora. No puedo deshacer esto.',
 

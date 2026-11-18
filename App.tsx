@@ -24,8 +24,9 @@ import TacticalWhiteboard from './components/TacticalWhiteboard';
 import { Notice } from './components/ui';
 import WitnessNotes from './components/WitnessNotes';
 import { LOCALES, useI18n, type Locale } from './services/i18n';
-import { readInvite } from './services/invite';
+import { readInvite, type Invite } from './services/invite';
 import { ToolScope, useRooms } from './services/sync';
+import { hasUnsavedWork } from './services/unsaved';
 import { PAGES, SECTIONS, TOOLS, goToPage, readRoute } from './tools';
 import type { ToolId } from './types';
 
@@ -84,31 +85,40 @@ function Page({ id, payload, title, shared, onSelectTool }: PageProps) {
 export default function App() {
   const { t, locale, setLocale } = useI18n();
   const { setLastRoom } = useRooms();
-  // An invite link opens the space dialog. The invite is then removed from the
-  // address, so that it is not in the history or in a copied address.
-  const [invite] = useState(() => {
-    const found = readInvite(window.location.hash, window.location.protocol === 'https:');
-    if (found) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/dashboard`);
-    return found;
-  });
+  const [invite, setInvite] = useState<Invite | null>(null);
   // The address holds the page, for example "#/phone-tree". A link to a page
   // then works, and so does the back button of the browser.
   const [route, setRoute] = useState(() => readRoute(window.location.hash));
   const activeTool = route.page;
-  const setActiveTool = (id: ToolId) => goToPage(id, t('nav.unsavedConfirm'));
-  useEffect(() => {
-    const onHashChange = () => {
-      setRoute(readRoute(window.location.hash));
-      window.scrollTo(0, 0);
-    };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
+  const setActiveTool = goToPage;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // The invite fills the form of each room. The member still types the passphrase.
   useEffect(() => {
-    if (invite) setLastRoom(invite);
-  }, [invite, setLastRoom]);
+    const onAddress = () => {
+      // An invite link can arrive at any time, also in a tab that is open. The
+      // invite fills the form of each room, and it is removed from the address
+      // so that it is not in a copied address. The member still types the passphrase.
+      const found = readInvite(window.location.hash, window.location.protocol === 'https:');
+      if (found) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/dashboard`);
+        setInvite(found);
+        setLastRoom(found);
+      }
+      const next = readRoute(window.location.hash);
+      // Each change of page comes through here: a button, a link, the back button.
+      if (next.page !== route.page && hasUnsavedWork() && !window.confirm(t('nav.unsavedConfirm'))) {
+        // Go to the page again. This adds an entry to the history, so the back button still works.
+        window.location.hash = `#/${route.page}`;
+        return;
+      }
+      if (next.page !== route.page || next.payload !== route.payload) {
+        setRoute(next);
+        window.scrollTo(0, 0);
+      }
+    };
+    onAddress();
+    window.addEventListener('hashchange', onAddress);
+    return () => window.removeEventListener('hashchange', onAddress);
+  }, [route, t, setLastRoom]);
   const [isDeviceOpen, setIsDeviceOpen] = useState(false);
 
   const navButton = (id: ToolId, label: string, Icon: ComponentType<{ className?: string }>) => (

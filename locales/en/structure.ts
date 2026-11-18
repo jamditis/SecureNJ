@@ -49,6 +49,7 @@ const structure = {
   'limits.habit.2': "Leave out names, addresses, case numbers, and immigration or medical details unless the tool needs them. Other people's details need the same care as your own.",
   'limits.habit.3': "Use agreed code words for alerts. They reduce what a message reveals, but they don't hide who contacted whom or when. Don't send specifics that you wouldn't want read aloud.",
   'limits.habit.4': "Keep a printed phone tree. Phones die, networks go down, and paper keeps working. Store it as carefully as the file.",
+  'limits.habit.5': "If the browser offers to save a passphrase, say no. A saved passphrase can go to an account in the cloud.",
 } as const;
 
 export default structure;

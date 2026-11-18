@@ -61,19 +61,48 @@ function deleteDatabase(name: string): Promise<boolean> {
   });
 }
 
+/** True if the database has the two stores that the sync library makes. */
+function isSyncDatabase(name: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(name);
+    request.onsuccess = () => {
+      const stores = request.result.objectStoreNames;
+      const result = stores.contains('updates') && stores.contains('custom');
+      request.result.close();
+      resolve(result);
+    };
+    request.onerror = () => resolve(false);
+  });
+}
+
+async function listedDatabases(): Promise<string[] | null> {
+  // Some browsers cannot list databases. The app then knows only the names that it kept.
+  if (typeof indexedDB.databases !== 'function') return null;
+  return (await indexedDB.databases()).map((db) => db.name).filter((name): name is string => !!name);
+}
+
 async function ownDatabases(registered: string[]): Promise<string[]> {
   const names = new Set([...KNOWN_DATABASES, ...registered]);
-  if (typeof indexedDB.databases === 'function') {
-    for (const { name } of await indexedDB.databases()) {
-      if (name && (name.startsWith(DATABASE_PREFIX) || OLD_SITE_DATABASE.test(name))) names.add(name);
-    }
+  for (const name of (await listedDatabases()) ?? []) {
+    if (name.startsWith(DATABASE_PREFIX)) names.add(name);
+    // A different site can use a name of the same form. Take only a database of the sync library.
+    else if (OLD_SITE_DATABASE.test(name) && (await isSyncDatabase(name))) names.add(name);
   }
   return Array.from(names);
 }
 
 export interface EraseResult {
-  /** False if a database delete is not complete yet. */
+  /** False if a step failed or a database delete is not complete yet. */
   complete: boolean;
+}
+
+/** Runs one step of the erase. A step that fails must not stop the steps after it. */
+async function step(run: () => Promise<boolean | void>): Promise<boolean> {
+  try {
+    return (await run()) !== false;
+  } catch {
+    return false;
+  }
 }
 
 export async function eraseDevice(local: Storage = localStorage, session: Storage = sessionStorage): Promise<EraseResult> {
@@ -81,16 +110,34 @@ export async function eraseDevice(local: Storage = localStorage, session: Storag
   clearOwnKeys(local);
   clearOwnKeys(session);
 
-  const deleted = await Promise.all((await ownDatabases(registered)).map(deleteDatabase));
+  const results = [
+    await step(async () => (await Promise.all((await ownDatabases(registered)).map(deleteDatabase))).every(Boolean)),
+    await step(async () => {
+      if (typeof caches === 'undefined') return;
+      const own = (await caches.keys()).filter((key) => key.startsWith(CACHE_PREFIX));
+      await Promise.all(own.map((key) => caches.delete(key)));
+    }),
+    await step(async () => {
+      if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+      // Only the service worker of this app. A site in a parent folder can have its own worker.
+      const registration = await navigator.serviceWorker.getRegistration();
+      const scope = new URL('./', window.location.href).href;
+      const script = registration?.active?.scriptURL ?? registration?.waiting?.scriptURL ?? registration?.installing?.scriptURL ?? '';
+      if (registration && registration.scope === scope && script === `${scope}sw.js`) await registration.unregister();
+    }),
+  ];
+  return { complete: results.every(Boolean) };
+}
 
-  if (typeof caches !== 'undefined') {
-    const own = (await caches.keys()).filter((key) => key.startsWith(CACHE_PREFIX));
-    await Promise.all(own.map((key) => caches.delete(key)));
-  }
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    // Only the service worker of this app, not the workers of other sites on the origin.
-    const registration = await navigator.serviceWorker.getRegistration();
-    await registration?.unregister();
-  }
-  return { complete: deleted.every(Boolean) };
+/**
+ * Removes what an earlier version of this app left on the device and that
+ * the app no longer uses: a stored group name and passphrase, and the
+ * database of a room that the app does not know. It runs at each start.
+ */
+export async function removeOldData(local: Storage = localStorage, session: Storage = sessionStorage): Promise<void> {
+  local.removeItem('snj.space');
+  session.removeItem('snj.space');
+  const known = new Set([...KNOWN_DATABASES, ...readRegistry(local)]);
+  const stale = ((await listedDatabases()) ?? []).filter((name) => name.startsWith(DATABASE_PREFIX) && !known.has(name));
+  await Promise.all(stale.map(deleteDatabase));
 }

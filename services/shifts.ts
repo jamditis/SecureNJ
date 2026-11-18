@@ -90,9 +90,11 @@ export type ShiftProblem = 'title' | 'time' | 'needed';
 export function readShiftDraft(draft: ShiftDraft): Omit<Shift, 'id'> | ShiftProblem {
   if (draft.title.trim() === '') return 'title';
   const start = new Date(`${draft.date}T${draft.startTime}`).getTime();
-  let end = new Date(`${draft.date}T${draft.endTime}`).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'time';
-  if (end <= start) end += 24 * 60 * 60 * 1000;
+  const endDate = new Date(`${draft.date}T${draft.endTime}`);
+  if (!Number.isFinite(start) || !Number.isFinite(endDate.getTime())) return 'time';
+  // The next calendar day, not 24 hours later: a day has 23 or 25 hours when the clocks change.
+  if (endDate.getTime() <= start) endDate.setDate(endDate.getDate() + 1);
+  const end = endDate.getTime();
   const needed = Number(draft.needed);
   if (!Number.isInteger(needed) || needed < 1 || needed > 999) return 'needed';
   return { title: draft.title.trim(), location: draft.location.trim(), start, end, needed, notes: draft.notes.trim() };

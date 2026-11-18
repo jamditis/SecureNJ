@@ -25,17 +25,35 @@ function filesOf(html) {
   return files;
 }
 
+/** True for the address of the app page: the folder of the app, or its index.html. */
+function isAppPage(url) {
+  const scope = new URL(self.registration.scope);
+  return url.origin === scope.origin && (url.pathname === scope.pathname || url.pathname === `${scope.pathname}index.html`);
+}
+
+// One save at a time. Two saves of different versions would each remove the files of the other.
+let saving = Promise.resolve();
+
 /** Saves the page and its files, then removes files of older versions. */
-async function savePage(response) {
-  const cache = await caches.open(CACHE);
-  const html = await response.clone().text();
-  const files = filesOf(html);
-  await cache.addAll([...files, ...EXTRA_FILES]);
-  await cache.put(PAGE, response.clone());
-  const current = new Set(files.map((file) => new URL(file, self.registration.scope).href));
-  for (const request of await cache.keys()) {
-    if (request.url.includes('/assets/') && !current.has(request.url)) await cache.delete(request);
-  }
+function savePage(response) {
+  saving = saving
+    .then(async () => {
+      const type = response.headers.get('content-type') || '';
+      const html = await response.text();
+      const files = filesOf(html);
+      // A page with no app files is not the app: an error page, or a page of a different site.
+      if (!response.ok || !type.includes('text/html') || files.length === 0) return;
+      const cache = await caches.open(CACHE);
+      await cache.addAll([...files, ...EXTRA_FILES]);
+      // A new response object: a response that came through a redirect cannot answer a navigation.
+      await cache.put(PAGE, new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } }));
+      const current = new Set(files.map((file) => new URL(file, self.registration.scope).href));
+      for (const request of await cache.keys()) {
+        if (request.url.includes('/assets/') && !current.has(request.url)) await cache.delete(request);
+      }
+    })
+    .catch(() => {});
+  return saving;
 }
 
 self.addEventListener('install', (event) => {
@@ -59,13 +77,16 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
+    // Only the app page. A navigation to a file or to a different site in this folder is not changed.
+    if (!isAppPage(url)) return;
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) event.waitUntil(savePage(response.clone()));
+          event.waitUntil(savePage(response.clone()));
           return response;
         })
         .catch(() => caches.match(PAGE, MATCH)),

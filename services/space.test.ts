@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generatePassphrase, passphraseProblem } from './passphrase';
+import { GENERATOR_WORDS, generatePassphrase, passphraseProblem } from './passphrase';
 import {
   deriveRoomKeys,
   normalizeSpaceName,
@@ -93,6 +93,14 @@ describe('passphrase', () => {
     expect(passphraseProblem('abababababababab')).toBe('guessable');
     expect(passphraseProblem('MyPassword2026!!')).toBe('guessable');
     expect(passphraseProblem('qwerty-keyboard-row')).toBe('guessable');
+  });
+
+  it('never refuses a passphrase that the generator can make', () => {
+    // One word of the generator list was also in the list of common strings.
+    // About 1 in 340 generated passphrases was then refused.
+    const filler = 'river tulip nine window orbit';
+    const refused = GENERATOR_WORDS.filter((word) => passphraseProblem(`${filler} ${word}`) !== null);
+    expect(refused).toEqual([]);
   });
 
   it('accepts a generated passphrase and a long mixed one', () => {

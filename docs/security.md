@@ -25,7 +25,7 @@ A person who does not have the passphrase:
 - cannot read the signaling messages, which are encrypted with a key from the room password,
 - cannot complete a WebRTC connection to a member, because the connection setup goes through those messages.
 
-The group name is not a secret. The passphrase is the only secret. The app refuses a passphrase of fewer than 12 characters, with fewer than 6 different characters, or with a common word, for a room and for each export.
+The group name is not a secret. The passphrase is the only secret. The app refuses a passphrase of fewer than 12 characters, with fewer than 6 different characters, or with one of a short list of common strings (for example "password"), for a room and for each export. This check refuses the worst passphrases. It does not prove that a passphrase is strong.
 
 ## Limits you must know
 
@@ -38,7 +38,7 @@ The group name is not a secret. The passphrase is the only secret. The app refus
 7. **A delete is not a secure erase.** The app rewrites its database after a delete (in 30 seconds or less while it is open), so the database does not keep the text of a deleted record. The browser and the disk can still keep traces.
 8. **Member names and member IDs are not verified.** A member can type any display name, and a member who changes the code can write a record in the name of a different member. Each device has a random member ID for each space. Reports, positions, and whiteboard lines carry it. The ID links the records of one device inside one space, and it is on that device.
 9. **The host of the app is trusted.** The party that serves the files can change the code. Host your own copy. Set the header `Content-Security-Policy: frame-ancestors 'none'` on your host. The app also refuses to run inside a frame.
-10. **Other sites on the same web origin can read the data.** Browser storage belongs to an origin (scheme, host, and port), not to a folder. A project site on GitHub Pages shares its origin with all other project sites of the same user: a script on one of them can read and change the data of this app. Host the app on an origin that serves nothing else, for example its own subdomain. "Erase this device" removes only the names that this app owns, so it does not delete the data of the other sites.
+10. **Other sites on the same web origin can read the data.** Browser storage belongs to an origin (scheme, host, and port), not to a folder. A project site on GitHub Pages shares its origin with all other project sites of the same user: a script on one of them can read and change the data of this app. Host the app on an origin that serves nothing else, for example its own subdomain. "Erase all data" removes only the names that this app or the earlier published site use. A different site that uses a name of the same form can lose that data.
 11. **The signaling server can show false peers.** It cannot read or change data, but it can send old connection messages again. The peer count can then be too high, and connections can be slow.
 12. **The content security policy permits a WebSocket to any host**, because your group sets the signaling server in the app. The policy blocks scripts, styles, and HTTP requests from other hosts. It is not a barrier against a member who changes the code.
 13. **The event page is not signed.** A person who can change the file in transit can replace it with a page that looks the same and sends the passphrase to them. Send the file through a channel that you trust, or tell participants to open it with no network connection.
@@ -53,7 +53,7 @@ The group name is not a secret. The passphrase is the only secret. The app refus
 - A wrong passphrase and damaged data give the same error. AES-GCM cannot tell them apart.
 - The security depends on the passphrase. Send the passphrase through a different channel than the file.
 
-The event page is an HTML file that contains the encrypted event and the code to decrypt it. It has a content security policy that blocks all network requests. A person who gets the file and the passphrase can read the event.
+The event page is an HTML file that contains the encrypted event and the code to decrypt it. It has a content security policy that blocks requests for scripts, styles, images, and data. The policy does not protect a file that someone changed (limit 13). A person who gets the file and the passphrase can read the event.
 
 ## What the app sends to other hosts
 

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { CalendarClock, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useLocale, useT } from '../services/i18n';
+import { deleteRecords } from '../services/retention';
 import { keyOfId } from '../services/schema';
 import {
   isPast,
@@ -42,14 +43,14 @@ export default function ShiftRoster() {
     (shift: Shift) => {
       if (!window.confirm(t('shifts.deleteConfirm'))) return;
       doc.transact(() => {
-        map.delete(shift.id);
+        deleteRecords(doc, 'shifts', [shift.id]);
         // The map can hold a bad record from a peer, so check each value.
         signupMap.forEach((signup: unknown, key) => {
           if (isShiftSignup(signup) && signup.shiftId === shift.id) signupMap.delete(key);
         });
       });
     },
-    [doc, map, signupMap, t],
+    [doc, signupMap, t],
   );
 
   const save = (event: FormEvent) => {

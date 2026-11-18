@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 import { WeakPassphraseError } from '../services/crypto';
 import { downloadBlob } from '../services/download';
@@ -45,6 +45,12 @@ export default function WitnessNotes() {
   const [error, setError] = useState<MessageKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  // A save takes time. If the person changes something in that time, the file is not the form on the screen.
+  const edits = useRef(0);
+  const markChanged = () => {
+    edits.current += 1;
+    setSaved(false);
+  };
 
   // The notes are in memory only. Ask before the browser drops notes that are not in a file.
   const unsaved = !saved && hasNotes(answers);
@@ -53,15 +59,15 @@ export default function WitnessNotes() {
   // After a change, the file on the device is not the form on the screen: take the "saved" message away.
   const changeWhen = (value: string) => {
     setWhen(value);
-    setSaved(false);
+    markChanged();
   };
   const changeAnswer = (id: WitnessFieldId, value: string) => {
     setAnswers((current) => ({ ...current, [id]: value }));
-    setSaved(false);
+    markChanged();
   };
   const changePassphrase = (value: string) => {
     setPassphrase(value);
-    setSaved(false);
+    markChanged();
   };
 
   const lockAndSave = async () => {
@@ -84,10 +90,11 @@ export default function WitnessNotes() {
       },
     };
     setBusy(true);
+    const editsAtStart = edits.current;
     try {
       const locked = await lockWitnessNotes(buildWitnessText(when, answers, labels), passphrase);
       downloadBlob(new Blob([locked], { type: WITNESS_FILE_TYPE }), WITNESS_FILE_NAME);
-      setSaved(true);
+      if (edits.current === editsAtStart) setSaved(true);
     } catch (problem) {
       setError(problem instanceof WeakPassphraseError ? `passphrase.problem.${problem.problem}` : 'witness.failed');
     } finally {

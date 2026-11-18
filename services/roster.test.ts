@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { purgeExpired } from './retention';
+import { deleteRecords, isDeleted, purgeExpired } from './retention';
 import {
   countGaps,
   isShift,
@@ -11,7 +11,7 @@ import {
   type Shift,
   type ShiftSignup,
 } from './shifts';
-import { clampDelta, countLow, isLow, isSupplyAdjustment, isSupplyItem, quantityOf, type SupplyItem } from './supplies';
+import { changeFor, clampDelta, countLow, isLow, isSupplyAdjustment, isSupplyItem, quantityOf, type SupplyItem } from './supplies';
 
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 18, 12, 0).getTime();
@@ -56,6 +56,37 @@ describe('shift roster', () => {
     if (typeof fields === 'string') throw new Error(fields);
     expect(fields.end - fields.start).toBe(1.5 * HOUR);
     expect(toShiftDraft({ id: 'x', ...fields })).toEqual({ ...draft, title: 'Food pickup' });
+  });
+
+  it('keeps a deleted shift deleted when a different member edits it at the same time', () => {
+    const ana = new Y.Doc();
+    ana.getMap('shifts').set('s1', shift());
+    ana.getMap('shiftSignups').set('s1:a', signup('s1', 'a'));
+    const ben = new Y.Doc();
+    Y.applyUpdate(ben, Y.encodeStateAsUpdate(ana));
+
+    // Ana deletes the shift. Ben, who is not connected, changes its title.
+    deleteRecords(ana, 'shifts', ['s1']);
+    ana.getMap('shiftSignups').delete('s1:a');
+    ben.getMap('shifts').set('s1', shift({ title: 'Hotline, room 2' }));
+    Y.applyUpdate(ana, Y.encodeStateAsUpdate(ben));
+    Y.applyUpdate(ben, Y.encodeStateAsUpdate(ana));
+
+    for (const doc of [ana, ben]) {
+      // The record can be in the map again after the merge, but it has a marker: tools hide it.
+      expect(isDeleted(doc, 'shifts', 's1')).toBe(true);
+      purgeExpired(doc, NOW);
+      expect(doc.getMap('shifts').has('s1')).toBe(false);
+    }
+  });
+
+  it('removes a delete marker after 30 days', () => {
+    const doc = new Y.Doc();
+    deleteRecords(doc, 'shifts', ['s1'], NOW);
+    purgeExpired(doc, NOW + 29 * 24 * HOUR);
+    expect(isDeleted(doc, 'shifts', 's1')).toBe(true);
+    purgeExpired(doc, NOW + 31 * 24 * HOUR);
+    expect(isDeleted(doc, 'shifts', 's1')).toBe(false);
   });
 
   it('treats an end time before the start time as a shift that ends on the next day', () => {
@@ -115,6 +146,16 @@ describe('supply inventory', () => {
       const all = Array.from(doc.getMap('supplyAdjustments').values()).filter(isSupplyAdjustment);
       expect(quantityOf('water', all)).toBe(13);
     }
+  });
+
+  it('shows zero, not a negative number, when two members each take the last stock', () => {
+    const taken = [adjust('water', 5), adjust('water', -5), adjust('water', -5)];
+    expect(quantityOf('water', taken)).toBe(0);
+    // The next "add 10" must show 10, so its record also covers the missing 5.
+    const change = changeFor(10, taken);
+    expect(change).toBe(15);
+    expect(quantityOf('water', [...taken, adjust('water', change)])).toBe(10);
+    expect(changeFor(-3, taken)).toBe(-0);
   });
 
   it('flags an item at or below its low level', () => {

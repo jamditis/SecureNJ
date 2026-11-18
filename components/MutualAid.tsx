@@ -4,7 +4,7 @@ import { decryptText, encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { useLocale, useT } from '../services/i18n';
 import { cleanImportedPosts, statusOf } from '../services/aid';
-import { AID_RETENTION, expiredIds } from '../services/retention';
+import { AID_RETENTION, deleteRecords, expiredIds } from '../services/retention';
 import { isAidClaim, isMutualAidPost, keyOfClaim, keyOfId } from '../services/schema';
 import { useRecords, useSharedSetting, useSync } from '../services/sync';
 import { timeAgo, useNow } from '../services/time';
@@ -49,13 +49,12 @@ export default function MutualAid() {
 
   const remove = useCallback(
     (ids: string[]) =>
-      doc.transact(() =>
-        ids.forEach((id) => {
-          map.delete(id);
-          claimMap.delete(id);
-        }),
-      ),
-    [doc, map, claimMap],
+      doc.transact(() => {
+        // The marker keeps a deleted post deleted if a member edits it at the same time.
+        deleteRecords(doc, 'posts', ids);
+        ids.forEach((id) => claimMap.delete(id));
+      }),
+    [doc, claimMap],
   );
 
   const categoryLabel = (category: string) => (isCategory(category) ? t(`aid.category.${category}`) : category);

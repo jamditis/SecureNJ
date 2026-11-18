@@ -1,7 +1,7 @@
 import { useT, type MessageKey } from '../services/i18n';
 
 const DOES: MessageKey[] = ['limits.does.1', 'limits.does.2', 'limits.does.3', 'limits.does.4'];
-const HABITS: MessageKey[] = ['limits.habit.1', 'limits.habit.2', 'limits.habit.3', 'limits.habit.4'];
+const HABITS: MessageKey[] = ['limits.habit.1', 'limits.habit.2', 'limits.habit.3', 'limits.habit.4', 'limits.habit.5'];
 const NOT_COUNT = 13;
 
 /**

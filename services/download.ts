@@ -7,5 +7,6 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // A phone can start the save late. An early release cancels it.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Minus, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useT } from '../services/i18n';
+import { deleteRecords } from '../services/retention';
 import { keyOfId } from '../services/schema';
-import { clampDelta, isLow, isSupplyAdjustment, isSupplyItem, quantityOf, type SupplyItem } from '../services/supplies';
+import { changeFor, isLow, isSupplyAdjustment, isSupplyItem, quantityOf, type SupplyItem } from '../services/supplies';
 import { useRecords, useSync } from '../services/sync';
 import { Button, EmptyState, Field, IconButton, Modal, ToolHeader, inputClass } from './ui';
 
@@ -37,7 +38,7 @@ export default function SupplyInventory() {
 
   /** Adds one record for the change. The quantity is the sum of these records. */
   const adjust = (item: SupplyItem, delta: number) => {
-    const change = clampDelta(delta, quantityOf(item.id, adjustments));
+    const change = changeFor(delta, adjustments.filter((adjustment) => adjustment.itemId === item.id));
     if (change === 0) return;
     const id = crypto.randomUUID();
     adjustmentMap.set(id, { id, itemId: item.id, delta: change, timestamp: Date.now() });
@@ -69,7 +70,7 @@ export default function SupplyInventory() {
   const remove = (item: SupplyItem) => {
     if (!window.confirm(t('supplies.deleteConfirm', { name: item.name }))) return;
     doc.transact(() => {
-      map.delete(item.id);
+      deleteRecords(doc, 'supplies', [item.id]);
       // The map can hold a bad record from a peer, so check each value.
       adjustmentMap.forEach((adjustment: unknown, key) => {
         if (isSupplyAdjustment(adjustment) && adjustment.itemId === item.id) adjustmentMap.delete(key);

@@ -31,9 +31,11 @@ import { ICE_SERVER_URLS } from './config';
 import { useT } from './i18n';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 import { passphraseProblem } from './passphrase';
-import { purgeExpired } from './retention';
-import { deriveRoomKeys, type RoomRequest, type SpaceKeys } from './space';
-import { eraseDevice, forgetDatabase, rememberDatabase } from './wipe';
+import { isDeleted, purgeExpired } from './retention';
+import { MEMORY_ONLY_TOOLS, deriveRoomKeys, type RoomRequest, type SpaceKeys } from './space';
+import { eraseDevice, forgetDatabase, rememberDatabase, removeOldData } from './wipe';
+
+export { MEMORY_ONLY_TOOLS };
 
 const LOCAL_DB = 'snj-local';
 const PRIVATE_DB = 'snj-private';
@@ -41,12 +43,18 @@ const SWEEP_INTERVAL_MS = 30_000;
 const DATABASE_TIMEOUT_MS = 10_000;
 const DELETE_TIMEOUT_MS = 3_000;
 
-/** The data of these tools is never written to this device. */
-export const MEMORY_ONLY_TOOLS: ReadonlySet<string> = new Set(['safety-alerts']);
-
 /** Tabs of one browser use this channel to leave a room or to erase the device together. */
 const TAB_CHANNEL = 'snj-tabs';
-type TabMessage = { type: 'leave'; dbName: string } | { type: 'erase' };
+type TabMessage = { type: 'leave'; roomId: string } | { type: 'erase' };
+
+/**
+ * An erase can come while a room is still opening (key derivation takes
+ * time). The number goes up at each erase, and an open that started before
+ * the erase stops when it sees a new number.
+ */
+let eraseCount = 0;
+/** The tools that have a room that is opening now. One open for each tool at a time. */
+const opening = new Set<string>();
 
 function tellOtherTabs(message: TabMessage): void {
   if (typeof BroadcastChannel === 'undefined') return;
@@ -177,6 +185,8 @@ export interface Session {
   memberId: string;
   /** The name of the browser database, or null when the document is in memory only. */
   dbName: string | null;
+  /** The public ID of the room, or null for a document with no room. */
+  roomId: string | null;
   /** Resolves when the saved data is loaded from the browser database. */
   ready: Promise<unknown>;
   /** Rewrites the browser database so that it holds the current data only. */
@@ -231,6 +241,7 @@ export function openSession(options: SessionOptions): Session {
     awareness,
     memberId,
     dbName,
+    roomId: keys ? keys.roomId : null,
     ready: persistence ? persistence.whenSynced : Promise.resolve(),
     compact: housekeeping.compact,
     close,
@@ -311,6 +322,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       Object.values(sessions).forEach((session) => session.close());
       Object.values(roomsRef.current).forEach((room) => room.session.close());
     };
+    // An earlier version stored a passphrase and saved safety alerts. Remove both.
+    void removeOldData().catch(() => {});
+    void sessions.local.ready.then(() => {
+      if (closed) return;
+      for (const name of ['sightings', 'confirmations']) {
+        const map = sessions.local.doc.getMap(name);
+        if (map.size > 0) map.clear();
+      }
+    });
     // The database never reports that it is not available, so use a time limit.
     withTimeout(Promise.all([sessions.local.ready, sessions.private.ready]), DATABASE_TIMEOUT_MS).then(
       () => !closed && setBase(sessions),
@@ -326,11 +346,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const openRoom = useCallback(
-    async (tool: string, request: RoomRequest) => {
-      if (passphraseProblem(request.passphrase)) throw new Error('weak passphrase');
+  const openRoomNow = useCallback(
+    async (tool: string, request: RoomRequest, startedAt: number) => {
       // Key derivation is slow by design. It runs before any network use.
       const keys = await deriveRoomKeys(tool, request.name, request.passphrase);
+      if (eraseCount !== startedAt) throw new Error('the device was erased');
       const persist = !MEMORY_ONLY_TOOLS.has(tool);
       // A room that is not saved leaves no trace on the device, so its member ID is not saved.
       const memberId = persist ? getMemberId(localStorage, keys.roomId) : crypto.randomUUID();
@@ -351,8 +371,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       });
       try {
         await withTimeout(session.ready, DATABASE_TIMEOUT_MS);
+        if (eraseCount !== startedAt) throw new Error('the device was erased');
       } catch (error) {
         session.close();
+        if (eraseCount !== startedAt && session.dbName) {
+          // The erase ran before this room got its database. Remove what this open made.
+          forgetMember(localStorage, session.dbName);
+          forgetDatabase(localStorage, session.dbName);
+          void deleteDatabase(session.dbName).catch(() => {});
+        }
         throw error;
       }
       setRooms((current) => {
@@ -366,21 +393,39 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const openRoom = useCallback(
+    async (tool: string, request: RoomRequest) => {
+      if (passphraseProblem(request.passphrase)) throw new Error('weak passphrase');
+      if (opening.has(tool)) throw new Error('this room is opening');
+      const startedAt = eraseCount;
+      opening.add(tool);
+      try {
+        await openRoomNow(tool, request, startedAt);
+      } finally {
+        opening.delete(tool);
+      }
+    },
+    [openRoomNow],
+  );
+
   const closeRoom = useCallback(
     async (tool: string, deleteLocalCopy: boolean) => {
       const room = rooms[tool];
       if (!room) return true;
-      const { dbName } = room.session;
-      if (dbName) tellOtherTabs({ type: 'leave', dbName });
+      const { dbName, roomId } = room.session;
+      if (roomId) tellOtherTabs({ type: 'leave', roomId });
       room.session.close();
       removeRoom(tool);
       if (!deleteLocalCopy || !dbName) return true;
       forgetMember(localStorage, dbName);
-      forgetDatabase(localStorage, dbName);
       // The browser waits until all tabs close the database. Do not wait
       // without limit: the delete completes later if a tab is slow.
       return withTimeout(deleteDatabase(dbName), DELETE_TIMEOUT_MS).then(
-        () => true,
+        () => {
+          // Keep the name in the list until the delete is done, so that an erase can still find it.
+          forgetDatabase(localStorage, dbName);
+          return true;
+        },
         () => false,
       );
     },
@@ -396,29 +441,39 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   // When one tab leaves a room or erases the device, the other tabs of this
   // browser do the same. An open tab would keep the connection and would
-  // block the delete of the database.
+  // block the delete of the database. The channel opens one time: a channel
+  // that opens again at each change can lose a message.
+  const baseRef = useRef(base);
+  useEffect(() => {
+    baseRef.current = base;
+  }, [base]);
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
     const channel = new BroadcastChannel(TAB_CHANNEL);
     channel.onmessage = (event: MessageEvent<TabMessage>) => {
       const message = event.data;
       if (message.type === 'leave') {
-        for (const [tool, room] of Object.entries(rooms)) {
-          if (room.session.dbName === message.dbName) {
+        for (const [tool, room] of Object.entries(roomsRef.current)) {
+          if (room.session.roomId === message.roomId) {
             room.session.close();
             removeRoom(tool);
           }
         }
       }
       if (message.type === 'erase') {
-        closeAll();
+        eraseCount += 1;
+        Object.values(roomsRef.current).forEach((room) => room.session.close());
+        setRooms({});
+        if (baseRef.current) Object.values(baseRef.current).forEach((session) => session.close());
+        setBase(null);
         setErased({ complete: true, here: false });
       }
     };
     return () => channel.close();
-  }, [rooms, removeRoom, closeAll]);
+  }, [removeRoom]);
 
   const erase = useCallback(async () => {
+    eraseCount += 1;
     tellOtherTabs({ type: 'erase' });
     // An open database blocks its delete, so close all documents first.
     closeAll();
@@ -497,19 +552,26 @@ export function ToolScope({ tool, children }: { tool: string; children: ReactNod
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
-function createRecordStore<T>(map: Y.Map<T>, isValid: (value: unknown) => value is T, keyOf: (record: T) => string) {
+function createRecordStore<T>(map: Y.Map<T>, name: string, isValid: (value: unknown) => value is T, keyOf: (record: T) => string) {
   let last: T[] = [];
+  const doc = map.doc;
+  const markers = doc?.getMap('deleted');
   return {
     subscribe: (onChange: () => void) => {
       map.observe(onChange);
-      return () => map.unobserve(onChange);
+      markers?.observe(onChange);
+      return () => {
+        map.unobserve(onChange);
+        markers?.unobserve(onChange);
+      };
     },
     // Yjs returns the same object for a record that did not change, so a
     // shallow comparison is sufficient to keep the snapshot stable.
     getSnapshot: () => {
       const next: T[] = [];
       map.forEach((value: unknown, key) => {
-        if (isValid(value) && keyOf(value) === key) next.push(value);
+        // A record with a delete marker came back through a merge. It stays hidden.
+        if (isValid(value) && keyOf(value) === key && !(doc && isDeleted(doc, name, key))) next.push(value);
       });
       if (next.length !== last.length || next.some((record, i) => record !== last[i])) last = next;
       return last;
@@ -530,7 +592,7 @@ export function useRecords<T>(
 ): { records: T[]; map: Y.Map<T> } {
   const sync = useSync();
   const map = (scope === 'private' ? sync.privateDoc : sync.doc).getMap<T>(name);
-  const store = useMemo(() => createRecordStore(map, isValid, keyOf), [map, isValid, keyOf]);
+  const store = useMemo(() => createRecordStore(map, name, isValid, keyOf), [map, name, isValid, keyOf]);
   const records = useSyncExternalStore(store.subscribe, store.getSnapshot);
   return { records, map };
 }

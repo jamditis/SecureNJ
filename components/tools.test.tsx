@@ -3,6 +3,7 @@ import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
+import { deleteRecords } from '../services/retention';
 import type { MutualAidPost, Sighting } from '../types';
 import ConsensusBuilder from './ConsensusBuilder';
 import MutualAid from './MutualAid';
@@ -87,6 +88,15 @@ describe('safety alerts', () => {
     await user.click(screen.getByRole('button', { name: 'Delete the report' }));
     expect(sync.doc.getMap('sightings').size).toBe(0);
     expect(Array.from(sync.doc.getMap('confirmations').keys())).toEqual(['bad', 'worse']);
+  });
+
+  it('hides a report that came back through a merge after a member deleted it', () => {
+    const sync = createTestSync();
+    deleteRecords(sync.doc, 'sightings', ['s1']);
+    // A member who was not connected changed the report. The merge puts the record back.
+    sync.doc.getMap('sightings').set('s1', sighting({ clearedAt: 5 }));
+    renderWithSync(<Sightings />, sync);
+    expect(screen.queryByRole('article')).toBeNull();
   });
 
   it('ignores a record that is stored under a key that is not its ID', () => {

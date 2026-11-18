@@ -23,7 +23,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { MessageKey } from './services/i18n';
-import { hasUnsavedWork } from './services/unsaved';
 import type { ToolId } from './types';
 
 export type SectionId = 'send' | 'ready' | 'document' | 'group';
@@ -101,11 +100,7 @@ export function readRoute(hash: string): { page: ToolId; payload: string } {
   return ALL_IDS.has(id) ? { page: id as ToolId, payload: rest.join('/') } : { page: 'dashboard', payload: '' };
 }
 
-/**
- * Opens a page. The change of the address makes the app show it. If a tool
- * holds work that is not saved, the person must agree first.
- */
-export function goToPage(id: ToolId, confirmText: string): void {
-  if (hasUnsavedWork() && !window.confirm(confirmText)) return;
+/** Opens a page. The change of the address makes the app show it. */
+export function goToPage(id: ToolId): void {
   window.location.hash = `#/${id}`;
 }

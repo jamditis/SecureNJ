@@ -20,7 +20,9 @@ export function generatePassphrase(wordCount = 6): string {
 
 export const MIN_PASSPHRASE_LENGTH = 12;
 const MIN_DISTINCT_CHARACTERS = 6;
-const COMMON_FRAGMENTS = ['password', 'passphrase', 'passcode', 'qwerty', '123456', 'abcdef', 'letmein', 'iloveyou', 'welcome'];
+// No fragment can be a word, or a part of a word, of the generator list: the
+// generator must never make a passphrase that this rule refuses. A test checks it.
+const COMMON_FRAGMENTS = ['password', 'passphrase', 'passcode', 'qwerty', '123456', 'abcdef', 'letmein', 'iloveyou'];
 
 export type PassphraseProblem = 'short' | 'guessable';
 
@@ -36,3 +38,6 @@ export function passphraseProblem(passphrase: string): PassphraseProblem | null 
   if (new Set(text).size < MIN_DISTINCT_CHARACTERS || COMMON_FRAGMENTS.some((fragment) => text.includes(fragment))) return 'guessable';
   return null;
 }
+
+/** For the test that the generator and the rule agree. */
+export const GENERATOR_WORDS: readonly string[] = wordlist;

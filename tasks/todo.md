@@ -53,28 +53,59 @@ Defects in `main` before this work:
 - [x] Event coordinator: export page with no network requests and its own content security policy.
 - [x] Dashboard: live counts and space status.
 
-## Pull request 2 (selected by the owner, not started)
+## Pull request 2 (jamditis/SecureNJ#4). Done, in review.
 
-New tools:
+Decisions from the owner during this work:
 
-- [ ] Shift roster: volunteer shifts with sign-up. Shows shifts with too few people.
-- [ ] Incident log: time-stamped observer notes with an encrypted export.
-- [ ] Resource directory: hotlines, legal aid, and shelter contacts that the group maintains. Printable. The group supplies the content.
-- [ ] Supply inventory: stock, location, low-stock flags.
+- The source of the published site (`gh-pages`) is lost. Rebuild its tools and pages here, in the current look, with its wording for those tools and pages.
+- Use its four strict rules: one room for each tool, never store the passphrase, do not save alerts to disk, strong passphrase check everywhere.
+- Legal text stays in English in the Spanish UI, with official Spanish links.
+- Do not touch the live site until the owner approves a publish.
 
 Platform:
 
-- [ ] Installable offline app: service worker and manifest.
-- [ ] Panic wipe: one action deletes all local data, the saved space, and the offline cache.
-- [ ] Encrypted backup and restore of a full space, and an invite link with a QR code. The passphrase is never in the link.
-- [ ] Spanish translation with a language switch.
+- [x] Offline start: service worker and manifest.
+- [x] Spanish with a language switch.
+- [x] Encrypted backup and restore, for the records of one tool.
+- [x] Invite link with QR code. No passphrase in the link.
+- [x] Erase all data, in all tabs. It also removes the data that the published site stored.
+
+Stricter rules:
+
+- [x] One room for each tool.
+- [x] The passphrase is never stored and not kept in memory.
+- [x] Safety alerts are never written to the device, and have no backup.
+- [x] The passphrase rule is in the one encrypt function.
+
+New tools:
+
+- [x] Shift roster.
+- [x] Supply inventory.
+
+Ported from the published site:
+
+- [x] Witness notes (covers the "incident log" that was selected).
+- [x] Resource sheet and the resources page (cover the "resource directory" that was selected).
+- [x] Know your rights card, family emergency plan, photo cleaner.
+- [x] Lock a file, and lock a message with a link and a QR code. Old links and old locked text still open.
+- [x] Pages: limits, resources, share this. Page addresses as on the published site.
+
+Not done, for a person to do:
+
+- [ ] A native speaker reviews the Spanish text. Strings with an open choice: "reporte" for both an alert report and a check-in; "despejado" for "clear"; "postura" for a position; "preocupación" for a concern; the one legal sentence in the witness notes notice.
+- [ ] A person confirms the rapid response hotline number (1-800-308-0878), which comes from the published site.
+- [ ] Test the photo cleaner in Safari and Firefox. It was tested in Chromium only.
+- [ ] Decide when to publish. The live site still serves the old build.
 
 ## Known limits, not in either pull request
 
 - Data at rest in the browser is not encrypted.
 - No roles inside a space. Each member can change and delete all data.
 - TURN servers that need credentials are not supported.
-- The main bundle is 546 kB (168 kB compressed). Split it by tool if the load time is a problem.
+- The main bundle is about 700 kB. Split it by tool if the load time is a problem.
+- The photo cleaner draws a photo at full size. A very large photo can be more than a phone browser permits.
+- In the photo cleaner, a cover can be placed with a pointer only, not with the keyboard.
+- With no room, all shared tools use one local document.
 
 ## Review
 
@@ -109,3 +140,23 @@ Accepted and documented in `docs/security.md`, not fixed:
 - The content security policy permits a WebSocket to any host, because the group sets the signaling server at run time.
 - A signaling server can replay old "announce" messages and show false peers. This is in `y-webrtc`.
 - The event page is not signed (limit 13).
+
+### Reviews of pull request 2
+
+The Codex review and two independent review agents (security and correctness) read pull request 2. Confirmed findings that are fixed, each with a test:
+
+- "Erase all data" deleted the storage of the full web origin, which GitHub Pages shares between all project sites of a user.
+- A backup of the alerts room wrote alerts to the device. A backup made with no room held the records of all local tools, and a restore could sync them into the wrong room.
+- A delete and an edit of one record at the same time brought the deleted record back without its child records. A deleted record now leaves a marker.
+- Spell check was on for the secret message field.
+- About 1 in 340 generated passphrases was refused: one word of the generator list was in the list of common strings.
+- An erase could lose a race with a room that was still opening.
+- The service worker saved any page in its folder as the app page.
+- Two "take" changes from two devices gave a negative stock.
+- The unsaved work question did not cover the back button, and an invite link was read only at the first load.
+- A browser that cannot list databases kept room databases after an erase.
+
+Accepted and documented, not fixed:
+
+- A browser can offer to save a passphrase. The limits page tells the person to say no.
+- The signaling server and the STUN server see IP addresses.

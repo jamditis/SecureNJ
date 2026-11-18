@@ -40,8 +40,17 @@ export function isSupplyAdjustment(value: unknown): value is SupplyAdjustment {
   return v !== null && typeof v.id === 'string' && typeof v.itemId === 'string' && isNumber(v.delta) && isNumber(v.timestamp);
 }
 
-export function quantityOf(itemId: string, adjustments: SupplyAdjustment[]): number {
+function rawSum(itemId: string, adjustments: SupplyAdjustment[]): number {
   return adjustments.reduce((sum, adjustment) => (adjustment.itemId === itemId ? sum + adjustment.delta : sum), 0);
+}
+
+/**
+ * The stock of one item. Two members who are not connected can each take
+ * the last stock, and the sum of their changes is then below zero. There
+ * is no stock below zero, so the quantity is zero.
+ */
+export function quantityOf(itemId: string, adjustments: SupplyAdjustment[]): number {
+  return Math.max(0, rawSum(itemId, adjustments));
 }
 
 export function isLow(item: SupplyItem, adjustments: SupplyAdjustment[]): boolean {
@@ -59,4 +68,15 @@ export function countLow(items: SupplyItem[], adjustments: SupplyAdjustment[]): 
 export function clampDelta(delta: number, quantity: number): number {
   if (!Number.isFinite(delta)) return 0;
   return delta < 0 ? Math.max(delta, -Math.max(0, quantity)) : delta;
+}
+
+/**
+ * The change record for a "take" or an "add" on one item. If the sum of the
+ * records is below zero, an "add" first brings the sum back to zero, so
+ * that "add 10" on an empty item shows 10.
+ */
+export function changeFor(delta: number, adjustmentsOfItem: SupplyAdjustment[]): number {
+  const sum = adjustmentsOfItem.reduce((total, adjustment) => total + adjustment.delta, 0);
+  const change = clampDelta(delta, Math.max(0, sum));
+  return change > 0 && sum < 0 ? change - sum : change;
 }

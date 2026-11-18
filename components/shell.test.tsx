@@ -5,7 +5,7 @@ import en from '../locales/en/index';
 import es from '../locales/es/index';
 import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
 import { hasUnsavedWork, useUnsavedWork } from '../services/unsaved';
-import { TOOLS, goToPage, readRoute } from '../tools';
+import { TOOLS, readRoute } from '../tools';
 import LimitsPage from './LimitsPage';
 
 afterEach(() => {
@@ -17,7 +17,7 @@ afterEach(() => {
 describe('page about limits', () => {
   it('shows each limit, in English and in Spanish', () => {
     render(<LimitsPage />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 4);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
     expect(screen.getByText("Data on your device isn't encrypted.")).toBeTruthy();
     cleanup();
 
@@ -26,7 +26,7 @@ describe('page about limits', () => {
         <LimitsPage />
       </I18nContext.Provider>,
     );
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 4);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
     expect(screen.getByText('Los datos en tu dispositivo no están cifrados.')).toBeTruthy();
   });
 });
@@ -68,24 +68,14 @@ describe('unsaved work', () => {
     return null;
   }
 
-  it('asks before the app opens a different page, and stays when the person says no', () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('knows when a tool holds work that is not saved', () => {
     const { rerender, unmount } = render(<Tool dirty={false} />);
     expect(hasUnsavedWork()).toBe(false);
-    goToPage('phone-tree', 'Leave?');
-    expect(confirm).not.toHaveBeenCalled();
-    expect(window.location.hash).toBe('#/phone-tree');
-
     rerender(<Tool dirty />);
     expect(hasUnsavedWork()).toBe(true);
-    goToPage('limits', 'Leave?');
-    expect(confirm).toHaveBeenCalledWith('Leave?');
-    expect(window.location.hash).toBe('#/phone-tree');
-
-    confirm.mockReturnValue(true);
-    goToPage('limits', 'Leave?');
-    expect(window.location.hash).toBe('#/limits');
-
+    rerender(<Tool dirty={false} />);
+    expect(hasUnsavedWork()).toBe(false);
+    rerender(<Tool dirty />);
     unmount();
     expect(hasUnsavedWork()).toBe(false);
   });

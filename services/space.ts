@@ -24,7 +24,10 @@ export interface SpaceKeys {
 }
 
 const encoder = new TextEncoder();
-/** The space dialog and the invite link use the same limit. */
+/** The data of these tools is never written to a device: not to a database and not to a backup file. */
+export const MEMORY_ONLY_TOOLS: ReadonlySet<string> = new Set(['safety-alerts']);
+
+/** The room form and the invite link use the same limit. */
 export const MAX_SPACE_NAME_LENGTH = 100;
 
 export function normalizeSpaceName(name: string): string {

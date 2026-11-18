@@ -6,7 +6,7 @@
  */
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Copy, Download, HardDrive, Settings2, Upload, Users } from 'lucide-react';
-import { NotABackupError, restoreBackup, sealBackup } from '../services/backup';
+import { NotABackupError, hasBackup, restoreBackup, sealBackup } from '../services/backup';
 import { DEFAULT_SIGNALING_URLS, ICE_SERVER_URLS } from '../services/config';
 import { MAX_CONTAINER_BYTES } from '../services/crypto';
 import { downloadBlob } from '../services/download';
@@ -113,9 +113,11 @@ function RoomBar({ tool }: { tool: string }) {
           <Users className="w-4 h-4" aria-hidden="true" /> {t('room.openInstead')}
         </Button>
       )}
+      {(space || hasBackup(tool)) && (
       <Button variant="light" className="!px-3 !py-1.5 !text-xs" onClick={() => setIsOpen(true)}>
         <Settings2 className="w-4 h-4" aria-hidden="true" /> {space ? t('room.settings') : t('room.dataSettings')}
       </Button>
+      )}
       {isOpen && <RoomDialog tool={tool} onClose={() => setIsOpen(false)} />}
     </div>
   );
@@ -130,6 +132,7 @@ function RoomDialog({ tool, onClose }: { tool: string; onClose: () => void }) {
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const savedOnDevice = !MEMORY_ONLY_TOOLS.has(tool);
+  const canBackUp = hasBackup(tool);
 
   const link = space ? makeInviteLink(window.location.href, space) : '';
   const copyLink = async () => {
@@ -140,14 +143,14 @@ function RoomDialog({ tool, onClose }: { tool: string; onClose: () => void }) {
 
   const backup = async (passphrase: string) => {
     const name = `securenj-${tool}-${new Date().toISOString().slice(0, 10)}.snj`;
-    downloadBlob(new Blob([await sealBackup(doc, passphrase)], { type: 'application/octet-stream' }), name);
+    downloadBlob(new Blob([await sealBackup(doc, tool, passphrase)], { type: 'application/octet-stream' }), name);
     setMessage({ tone: 'info', text: t('device.backupSaved', { name }) });
   };
 
   const restore = async (bytes: Uint8Array, passphrase: string) => {
     try {
-      await restoreBackup(doc, bytes, passphrase);
-      setMessage({ tone: 'info', text: t('device.restored') });
+      const count = await restoreBackup(doc, tool, bytes, passphrase);
+      setMessage({ tone: 'info', text: t('room.restored', { count }) });
     } catch (error) {
       // A wrong passphrase stays in the passphrase dialog. A wrong file ends here.
       if (!(error instanceof NotABackupError)) throw error;
@@ -205,6 +208,7 @@ function RoomDialog({ tool, onClose }: { tool: string; onClose: () => void }) {
         </>
       )}
 
+      {canBackUp && (
       <section className="space-y-3 pt-4 border-t border-slate-100">
         <h4 className="font-bold text-slate-900">{t('device.backupTitle')}</h4>
         <p className="text-sm text-slate-600 leading-relaxed">{t('room.backupNote')}</p>
@@ -219,6 +223,7 @@ function RoomDialog({ tool, onClose }: { tool: string; onClose: () => void }) {
         </div>
         {message && <Notice tone={message.tone}>{message.text}</Notice>}
       </section>
+      )}
 
       {space && (
         <section className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">

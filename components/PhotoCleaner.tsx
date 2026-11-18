@@ -28,6 +28,12 @@ export default function PhotoCleaner() {
   const [percent, setPercent] = useState(COVER_PERCENT_DEFAULT);
   const [problem, setProblem] = useState<'open' | 'save' | null>(null);
   const [saved, setSaved] = useState(false);
+  // A save takes time. If the person changes something in that time, the file is not the form on the screen.
+  const edits = useRef(0);
+  const markChanged = () => {
+    edits.current += 1;
+    setSaved(false);
+  };
   const [busy, setBusy] = useState(false);
 
   const pickFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -35,7 +41,7 @@ export default function PhotoCleaner() {
     loadRef.current += 1;
     const load = loadRef.current;
     setProblem(null);
-    setSaved(false);
+    markChanged();
     setCovers([]);
     setPicture(null);
     if (!file) return;
@@ -82,19 +88,20 @@ export default function PhotoCleaner() {
     );
     if (!cover) return;
     setCovers([...covers, cover]);
-    setSaved(false);
+    markChanged();
   };
 
   const undo = () => {
     setCovers(covers.slice(0, -1));
-    setSaved(false);
+    markChanged();
   };
 
   const save = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setProblem(null);
-    setSaved(false);
+    markChanged();
+    const editsAtStart = edits.current;
     setBusy(true);
     const file = await buildCleanedFile((type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality))).catch(() => null);
     setBusy(false);
@@ -103,7 +110,7 @@ export default function PhotoCleaner() {
       return;
     }
     downloadBlob(file, CLEANED_FILE_NAME);
-    setSaved(true);
+    if (edits.current === editsAtStart) setSaved(true);
   };
 
   return (

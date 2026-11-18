@@ -133,7 +133,7 @@ export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={mode === 'lock' ? 7 : 5}
-            spellCheck={mode === 'lock'}
+            spellCheck={false}
             className={`${inputClass} ${mode === 'lock' ? '' : 'font-mono break-all'}`}
           />
         </Field>
