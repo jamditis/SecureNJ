@@ -16,7 +16,7 @@ afterEach(() => {
 describe('page about limits', () => {
   it('shows each limit, in English and in Spanish', () => {
     render(<LimitsPage />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 14 + 5);
     expect(screen.getByText("Data on your device isn't encrypted.")).toBeTruthy();
     cleanup();
 
@@ -25,7 +25,7 @@ describe('page about limits', () => {
         <LimitsPage />
       </I18nContext.Provider>,
     );
-    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(4 + 14 + 5);
     expect(screen.getByText('Los datos en tu dispositivo no están cifrados.')).toBeTruthy();
   });
 });

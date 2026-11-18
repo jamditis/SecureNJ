@@ -6,8 +6,9 @@
  * machine writes (`scripts/translate.ts`). A message with no translation, or
  * with a translation that fails the check in `messages.ts`, shows in English.
  *
- * To add a language: add it to `LOCALES` and to `TARGETS` in
- * `scripts/translate.ts`, and add an empty file `locales/<code>.json`.
+ * To add a language: add `locales/<code>.json` and
+ * `locales/<code>.stamp.json` with `{}`, import the first one here, and add
+ * the language to `LOCALES`. Then translate (see `scripts/translate.ts`).
  */
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import en from '../locales/en/index';

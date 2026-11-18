@@ -78,9 +78,9 @@ export default function ResourcesPage() {
           ))}
         </ul>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {text.prompts.map((prompt) => (
+          {text.prompts.map((prompt, index) => (
             <PromptCard
-              key={prompt.title}
+              key={index}
               prompt={prompt}
               copied={copied === prompt.title}
               failed={failed === prompt.title}

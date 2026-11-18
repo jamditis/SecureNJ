@@ -11,11 +11,11 @@ describe('makeTranslate', () => {
   });
 
   it('replaces each placeholder with its value', () => {
-    expect(t('dashboard.inSpace', { name: 'Ironbound', count: 3 })).toBe('Room: Ironbound · peers: 3');
+    expect(t('rights.hint.hotline', { name: 'A', source: 'B' })).toBe('This is the A number, as listed by the B. Call it to confirm before you print or share it.');
   });
 
   it('keeps a placeholder that has no value, so a missing value is visible', () => {
-    expect(t('dashboard.inSpace', { name: 'Ironbound' })).toBe('Room: Ironbound · peers: {count}');
+    expect(t('rights.hint.hotline', { name: 'A' })).toBe('This is the A number, as listed by the {source}. Call it to confirm before you print or share it.');
   });
 
   it('does not treat a value as a template', () => {

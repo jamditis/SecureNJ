@@ -14,6 +14,8 @@ const rights = {
   'rights.translated': "The card text is a machine translation. A lawyer hasn't reviewed it. For an official card in many languages, use the {ilrc}.",
   'rights.translated.ilrc': 'ILRC red cards',
   'rights.showEnglish': 'Show the card in English',
+  // Printed on a card that is not in English.
+  'rights.printNote': "Machine translation of the English card. A lawyer hasn't reviewed it.",
   'rights.field.hotline': 'Rapid response hotline',
   'rights.hint.hotline': 'This is the {name} number, as listed by the {source}. Call it to confirm before you print or share it.',
   'rights.field.lawyer': 'Your lawyer or legal group (optional)',

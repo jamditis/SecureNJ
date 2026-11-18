@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { FolderOpen, Lock, Printer } from 'lucide-react';
 import { DEFAULT_ANSWERS, HOTLINE_ITEM_ID, type NotePart, type PlanItem } from '../content/familyPlan';
+import { RIGHTS_LINKS } from '../content/rightsCard';
 import { familyPlanText } from '../services/contentText';
 import { downloadBlob } from '../services/download';
 import {
@@ -163,7 +164,9 @@ export default function FamilyPlan() {
           <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
             <p>{t('family.translatedNotice')}</p>
             <ul className="list-disc ps-5">
-              {text.languageLinks.map((link) => (
+              {text.languageLinks
+                .filter((link) => locale === 'es' || link.href !== RIGHTS_LINKS.acluGuideSpanish)
+                .map((link) => (
                 <li key={link.href}>
                   <OutsideLink {...link} />
                 </li>
@@ -175,8 +178,8 @@ export default function FamilyPlan() {
         <section className={CARD_CLASS}>
           <h3 className="font-bold text-slate-900 text-lg">{t('family.firstSteps')}</h3>
           <ol className="list-decimal ps-5 space-y-1.5 text-sm text-slate-700">
-            {text.firstSteps.map((step) => (
-              <li key={step}>{step}</li>
+            {text.firstSteps.map((step, index) => (
+              <li key={index}>{step}</li>
             ))}
           </ol>
           <p className="text-xs text-slate-500 leading-relaxed">
@@ -187,8 +190,8 @@ export default function FamilyPlan() {
 
       <div className="space-y-6">
         <h3 className="hidden print:block text-2xl font-bold text-black">{t('family.printTitle')}</h3>
-        {text.sections.map((section) => (
-          <section key={section.section} className={`${CARD_CLASS} print:border-0 print:p-0 print:rounded-none`}>
+        {text.sections.map((section, sectionIndex) => (
+          <section key={sectionIndex} className={`${CARD_CLASS} print:border-0 print:p-0 print:rounded-none`}>
             <h3 className="font-bold text-slate-900 text-lg print:text-black print:break-after-avoid">
               {section.section}
             </h3>

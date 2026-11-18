@@ -370,6 +370,17 @@ describe('family plan: Spanish', () => {
     }
   });
 
+  it('shows the guide that exists only in Spanish to a reader of Spanish only', () => {
+    render(
+      <I18nContext.Provider value={i18nFor('zh')}>
+        <FamilyPlan />
+      </I18nContext.Provider>,
+    );
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toContain('https://www.ilrc.org/red-cards-tarjetas-rojas');
+    expect(hrefs).not.toContain('https://www.aclu.org/files/kyr/MKG17-KYR-PoliceImmigrationFBI-OnePager-Spanish-v01.pdf');
+  });
+
   it('does not show the language notice in English', () => {
     render(<FamilyPlan />);
     expect(screen.queryByRole('link', { name: 'ACLU guide in Spanish' })).toBeNull();

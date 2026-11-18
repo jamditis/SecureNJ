@@ -4,7 +4,7 @@ import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
 import { RIGHTS_LINKS } from '../content/rightsCard';
 import { englishContent, rightsCardText } from '../services/contentText';
 import { useContentText, useLocale, useT } from '../services/i18n';
-import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, isDefaultHotline, splitTemplate, type ContactKey } from '../services/rights';
+import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, englishQuotes, isDefaultHotline, splitAtEnglish, splitTemplate, type ContactKey } from '../services/rights';
 import { Button, Notice, ToolHeader, inputClass } from './ui';
 
 /** A link to a different site. It opens in a new tab and sends no referrer. */
@@ -23,6 +23,26 @@ function Rich({ template, slots }: { template: string; slots: Record<string, Rea
       {splitTemplate(template).map((part, index) => (
         <Fragment key={index}>{part.kind === 'text' ? part.value : (slots[part.name] ?? `{${part.name}}`)}</Fragment>
       ))}
+    </>
+  );
+}
+
+/** The English card. A translated line keeps its sentences to say to an agent from here. */
+const ENGLISH_CARD = rightsCardText(englishContent);
+
+/** A line of the card. A sentence that stays in English gets its own language and direction. */
+function CardLine({ line, english }: { line: string; english: readonly string[] }) {
+  return (
+    <>
+      {splitAtEnglish(line, english).map((part, index) =>
+        part.english ? (
+          <bdi key={index} lang="en" dir="ltr">
+            {part.text}
+          </bdi>
+        ) : (
+          <Fragment key={index}>{part.text}</Fragment>
+        ),
+      )}
     </>
   );
 }
@@ -131,12 +151,15 @@ export default function RightsCard() {
         className="bg-white text-black border-2 border-black max-w-xl p-4 text-sm leading-snug space-y-2 break-inside-avoid"
       >
         <h3 className="font-serif text-xl font-bold">{card.title}</h3>
-        {card.sections.map((section) => (
-          <Fragment key={section.heading}>
+        {card.sections.map((section, sectionIndex) => (
+          <Fragment key={sectionIndex}>
             <h4 className="font-bold">{section.heading}</h4>
             <ul className="list-disc ps-5 space-y-0.5">
-              {section.items.map((item) => (
-                <li key={item}>{item}</li>
+              {section.items.map((item, itemIndex) => (
+                <li key={itemIndex}>
+                  {/* The English card needs no marks: all of it is English. */}
+                  <CardLine line={item} english={cardIsEnglish ? [] : englishQuotes(ENGLISH_CARD.sections[sectionIndex].items[itemIndex])} />
+                </li>
               ))}
             </ul>
           </Fragment>
@@ -152,6 +175,8 @@ export default function RightsCard() {
           </dl>
         )}
         <p className="text-xs">{card.sourceLine}</p>
+        {/* A printed card can go from hand to hand. It must say what it is. */}
+        {!cardIsEnglish && <p className="text-xs font-bold">{t('rights.printNote')}</p>}
       </section>
 
       <div className="no-print space-y-6">

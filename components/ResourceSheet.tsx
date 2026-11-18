@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Copy, Plus, Printer, Trash2 } from 'lucide-react';
 import { SPANISH_LINKS } from '../content/resourceSheet';
+import { RIGHTS_LINKS } from '../content/rightsCard';
 import { resourceSheetText } from '../services/contentText';
 import { useContentText, useLocale, useT } from '../services/i18n';
 import {
@@ -130,7 +131,7 @@ export default function ResourceSheet() {
             <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
               <p>{t('sheet.startersNote')}</p>
               <ul className="list-disc ps-5">
-                {SPANISH_LINKS.map((link) => (
+                {SPANISH_LINKS.filter((link) => locale === 'es' || link.url !== RIGHTS_LINKS.acluGuideSpanish).map((link) => (
                   <li key={link.id}>
                     <a href={link.url} target="_blank" rel="noopener noreferrer" className={linkClass}>
                       {t(`sheet.spanishLink.${link.id}`)}

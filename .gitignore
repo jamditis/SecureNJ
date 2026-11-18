@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Work files of `npm run translate -- --todo`
+.translate
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

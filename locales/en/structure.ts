@@ -44,6 +44,8 @@ const structure = {
   'limits.not.12.text': "The site can't check who posted a report or if it's true. Confirm a safety alert before you act on it or pass it on.",
   'limits.not.13.lead': "Encryption depends on the passphrase.",
   'limits.not.13.text': "Anyone with a locked file or link can keep guessing, so use the dice button to make a passphrase. Send it by a different channel than the file, and know that no one can recover it.",
+  'limits.not.14.lead': "Other languages are machine translations.",
+  'limits.not.14.text': "No person reviewed the text in languages other than English, and that includes the rights card. A translation can be wrong. If a text matters, compare it with the English text or use official material in your language.",
   'limits.habitsTitle': "Habits that help",
   'limits.habit.1': "On a shared or library computer, use a private window. Clear the room and close the window when you finish.",
   'limits.habit.2': "Leave out names, addresses, case numbers, and immigration or medical details unless the tool needs them. Other people's details need the same care as your own.",

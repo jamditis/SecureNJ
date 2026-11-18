@@ -46,7 +46,6 @@ const core = {
 
   'dashboard.heading': 'Tools for local resilience',
   'dashboard.intro': 'Tools for community organizations, legal aid groups, and mutual aid networks. They run in your browser. Your group controls the data.',
-  'dashboard.inSpace': 'Room: {name} · peers: {count}',
   'dashboard.alerts': 'Active alerts: {count}',
   'dashboard.status': 'Need attention: {count}',
   'dashboard.proposals': 'Open proposals: {count}',

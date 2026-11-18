@@ -106,6 +106,11 @@ describe('invite link', () => {
   it('returns nothing for an address with no invite or with a damaged invite', () => {
     const encode = (value: unknown) => `#join=${btoa(JSON.stringify(value))}`;
     expect(readInvite('', true)).toBeNull();
+    // A direction control character in the name can reverse the sentence that shows the name.
+    for (const mark of ['\u202e', '\u2066', '\u200f', '\u061c']) {
+      const hostile = makeInviteLink('https://app.example/', { name: `group${mark}eman`, signaling: [] });
+      expect(readInvite(new URL(hostile).hash, true)).toBeNull();
+    }
     expect(readInvite('#other', true)).toBeNull();
     expect(readInvite('#join=%%%', true)).toBeNull();
     expect(readInvite(encode('text'), true)).toBeNull();

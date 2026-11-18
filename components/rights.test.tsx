@@ -5,12 +5,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
 import { RIGHTS_CARD, RIGHTS_LINKS } from '../content/rightsCard';
-import { I18nContext, i18nFor, translationOf } from '../services/i18n';
+import { I18nContext, i18nFor, translationOf, type Locale } from '../services/i18n';
 import RightsCard from './RightsCard';
 
 afterEach(cleanup);
 
-const renderIn = (locale: 'en' | 'es', ui: ReactElement = <RightsCard />) =>
+const renderIn = (locale: Locale, ui: ReactElement = <RightsCard />) =>
   render(<I18nContext.Provider value={i18nFor(locale)}>{ui}</I18nContext.Provider>);
 
 const card = (name = 'Printable rights card') => screen.getByRole('region', { name });
@@ -160,6 +160,30 @@ describe('know your rights card in Spanish', () => {
     expect(cardTexts(spanish, 'dt')).toEqual([es['content.rights.label.hotline']]);
     // The card has the language of the page.
     expect(spanish.getAttribute('lang')).toBeNull();
+  });
+
+  it('marks each sentence to say to an agent as English and left to right, also in a right to left card', () => {
+    renderIn('ar');
+    const arabic = screen.getByRole('region');
+    const marked = Array.from(arabic.querySelectorAll('bdi'));
+    expect(marked.map((node) => [node.getAttribute('lang'), node.getAttribute('dir')])).toEqual(Array(marked.length).fill(['en', 'ltr']));
+    expect(marked.map((node) => node.textContent)).toEqual([
+      'I do not consent to your entry.',
+      'I do not consent to your entry or to your search of these premises. I am exercising my right to remain silent. I wish to speak with a lawyer as soon as possible.',
+      'I am exercising my right to remain silent.',
+    ]);
+  });
+
+  it('prints on a translated card that it is a machine translation, and not on the English card', async () => {
+    const user = userEvent.setup();
+    renderIn('es');
+    const shown = card('Tarjeta de derechos para imprimir');
+    const note = es['rights.printNote'] as string;
+    expect(note).toMatch(/traducción automática/i);
+    // The note is inside the part of the page that prints.
+    expect(within(shown).getByText(note).closest('.no-print')).toBeNull();
+    await user.click(screen.getByRole('checkbox', { name: 'Mostrar la tarjeta en inglés' }));
+    expect(within(shown).queryByText(note)).toBeNull();
   });
 
   it('shows and prints the English card, with the same text as in English mode, when the person asks', async () => {

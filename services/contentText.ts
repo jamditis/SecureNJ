@@ -7,9 +7,10 @@
  * its keys to the translation script (`contentMessages`), so the keys cannot
  * be different in the two places.
  *
- * Not translated: phone numbers, addresses of pages, and the names of
- * organizations and products. A reader must find the same name on the page
- * that the link opens.
+ * Not translated: phone numbers, addresses of pages, the contact of a
+ * listing, and the names of organizations and products. A reader must find
+ * the same name on the page that the link opens, and a value that becomes a
+ * link must not come from a language file.
  */
 import { FIRST_STEPS, HOTLINE_NOTE, LANGUAGE_LINKS, LEARN_MORE, PLAN_SECTIONS, type NotePart, type PlanSection } from '../content/familyPlan';
 import { NOTE_EXAMPLE, STARTER_LISTINGS, type StarterListing } from '../content/resourceSheet';
@@ -96,11 +97,12 @@ export interface ResourceSheetText {
 
 export function resourceSheetText(text: ContentLookup): ResourceSheetText {
   return {
-    // The name is the name of an organization. The contact can have words ("Dial 211").
+    // Only the description has a translation. The name is the name of an
+    // organization, and the contact is a phone number or an address that
+    // becomes a link: a language file must not be able to change it.
     starters: STARTER_LISTINGS.map((listing, index) => ({
       ...listing,
       offers: text(`content.sheet.starter${index}.offers`, listing.offers),
-      contact: text(`content.sheet.starter${index}.contact`, listing.contact),
     })),
     noteExample: text('content.sheet.noteExample', NOTE_EXAMPLE),
   };

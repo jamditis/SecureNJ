@@ -294,14 +294,26 @@ describe('resource sheet in Spanish', () => {
     await user.click(screen.getByRole('button', { name: 'Agregar entradas iniciales de Nueva Jersey' }));
     const items = within(screen.getByRole('region', { name: 'Hoja de recursos para imprimir' })).getAllByRole('listitem');
     expect(items.map((item) => item.textContent)).toEqual(
-      STARTER_LISTINGS.map((starter, index) => starter.name + es[`content.sheet.starter${index}.offers`] + starter.when + es[`content.sheet.starter${index}.contact`]),
+      STARTER_LISTINGS.map((starter, index) => starter.name + es[`content.sheet.starter${index}.offers`] + starter.when + starter.contact),
     );
-    expect(items[0].textContent).toBe('NJ 211Referencias para vivienda, comida, servicios públicos y otras necesidadesMarca 211 o visita nj211.org');
-    // A phone number and an address of a site are the same in each language.
+    // The contact has no translation: it is a phone number or an address, and it becomes a link.
+    expect(items[0].textContent).toBe('NJ 211Referencias para vivienda, comida, servicios públicos y otras necesidadesDial 211 or nj211.org');
     expect(items[1].textContent).toContain('lsnj.org');
-    expect(items[2].textContent).toContain('1-800-308-0878');
+    expect(within(items[2]).getByRole('link', { name: '1-800-308-0878' }).getAttribute('href')).toBe('tel:18003080878');
+    expect(Object.keys(es).filter((key) => /^content\.sheet\.starter\d+\.contact$/.test(key))).toEqual([]);
     expect(screen.getByLabelText<HTMLInputElement>('Nota corta').placeholder).toBe('Revisado en noviembre de 2026');
     expect(NOTE_EXAMPLE).toBe('Checked November 2026');
+  });
+
+  it('shows the guide that exists only in Spanish to a reader of Spanish only', () => {
+    render(
+      <I18nContext.Provider value={i18nFor('pt')}>
+        <ResourceSheet />
+      </I18nContext.Provider>,
+    );
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toContain(SPANISH_LINKS[0].url);
+    expect(hrefs).not.toContain('https://www.aclu.org/files/kyr/MKG17-KYR-PoliceImmigrationFBI-OnePager-Spanish-v01.pdf');
   });
 
   it('does not show the note about English in the English app', () => {

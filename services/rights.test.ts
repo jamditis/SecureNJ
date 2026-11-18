@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RAPID_RESPONSE_HOTLINE } from '../content/hotlines';
 import { RIGHTS_CARD, RIGHTS_LINKS } from '../content/rightsCard';
 import en from '../locales/en/rights';
-import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, isDefaultHotline, splitTemplate } from './rights';
+import { CONTACT_MAX_LENGTH, contactRows, defaultContacts, englishQuotes, isDefaultHotline, splitAtEnglish, splitTemplate } from './rights';
 
 /**
  * The script that wrote the content files computed these digests from the
@@ -109,3 +109,32 @@ describe('message with link positions', () => {
 });
 
 // The checks of the translated text (slots, numbers, no empty text) are in `messages.test.ts`, for each language.
+
+describe('sentences of a card line that stay in English', () => {
+  it('splits a translated line at each English sentence, and loses no character', () => {
+    const line = 'Di: "I do not consent to your entry." (No doy mi consentimiento.)';
+    const parts = splitAtEnglish(line, ['I do not consent to your entry.']);
+    expect(parts).toEqual([
+      { text: 'Di: "', english: false },
+      { text: 'I do not consent to your entry.', english: true },
+      { text: '" (No doy mi consentimiento.)', english: false },
+    ]);
+    expect(parts.map((part) => part.text).join('')).toBe(line);
+  });
+
+  it('finds two sentences in the order of the line, and gives one part for a line with none', () => {
+    expect(splitAtEnglish('b: B. a: A.', ['A.', 'B.']).map((part) => [part.text, part.english])).toEqual([
+      ['b: ', false],
+      ['B.', true],
+      [' a: ', false],
+      ['A.', true],
+    ]);
+    expect(splitAtEnglish('No quote here', ['I consent'])).toEqual([{ text: 'No quote here', english: false }]);
+    expect(splitAtEnglish('Text', [])).toEqual([{ text: 'Text', english: false }]);
+  });
+
+  it('reads the sentences from the English card', () => {
+    expect(englishQuotes('Say: "One." Then "Two."')).toEqual(['One.', 'Two.']);
+    expect(englishQuotes('Stay calm.')).toEqual([]);
+  });
+});

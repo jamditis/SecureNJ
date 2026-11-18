@@ -12,7 +12,6 @@ const platform = {
   'device.backupPassphraseNote': 'The backup is encrypted with this passphrase. Use a different passphrase than the passphrase of the room, and keep it apart from the file.',
   'device.backupSaved': 'Saved: {name}',
   'device.restore': 'Restore a backup',
-  'device.restored': 'The backup is added.',
   'device.notBackup': 'The file is not a backup of a room.',
   'device.eraseTitle': 'Erase this device',
   'device.eraseNote': "This deletes all data of the app from this browser: all tools, the phone tree, the data of each room, and the offline copy of the app. Other members keep their copies. You cannot undo this.",
