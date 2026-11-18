@@ -259,7 +259,7 @@ async function main() {
     assert.ok(sockets.get(ana).some((socket) => socket.open), 'a member of a space has a connection to the signaling server');
     await ana.getByRole('navigation').getByRole('button', { name: /Smoke test/ }).click();
     await ana.getByRole('button', { name: 'Leave the space' }).click();
-    await ana.getByRole('heading', { name: 'You work on this device only' }).waitFor();
+    await ana.getByRole('navigation').getByText('This device only').waitFor();
     const deadline = Date.now() + 10_000;
     while (sockets.get(ana).some((socket) => socket.open)) {
       assert.ok(Date.now() < deadline, 'the signaling connection is open after the member left');
