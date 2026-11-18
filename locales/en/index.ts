@@ -4,7 +4,8 @@
  */
 import core from './core';
 import platform from './platform';
+import roster from './roster';
 
-const en = { ...core, ...platform } as const;
+const en = { ...core, ...platform, ...roster } as const;
 
 export default en;

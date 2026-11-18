@@ -68,6 +68,8 @@ export function purgeExpired(doc: Y.Doc, now: number): number {
     deleted += deleteOrphans(doc.getMap('confirmations'), 'sightingId', sightings);
     deleted += deleteOrphans(doc.getMap('claims'), 'postId', posts);
     deleted += deleteOrphans(doc.getMap('votes'), 'proposalId', doc.getMap('proposals'));
+    deleted += deleteOrphans(doc.getMap('shiftSignups'), 'shiftId', doc.getMap('shifts'));
+    deleted += deleteOrphans(doc.getMap('supplyAdjustments'), 'itemId', doc.getMap('supplies'));
   });
   return deleted;
 }

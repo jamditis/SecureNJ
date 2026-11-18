@@ -7,6 +7,8 @@ export type ToolId =
   | 'event-creator'
   | 'phone-tree'
   | 'mutual-aid'
+  | 'shift-roster'
+  | 'supply-inventory'
   | 'secure-share';
 
 export interface EventDetails {

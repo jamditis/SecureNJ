@@ -7,9 +7,11 @@ import EventCreator from './components/EventCreator';
 import MutualAid from './components/MutualAid';
 import PhoneTree from './components/PhoneTree';
 import SecureShare from './components/SecureShare';
+import ShiftRoster from './components/ShiftRoster';
 import Sightings from './components/Sightings';
 import SpaceDialog from './components/SpaceDialog';
 import StatusBoard from './components/StatusBoard';
+import SupplyInventory from './components/SupplyInventory';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
 import { Notice } from './components/ui';
 import { LOCALES, useI18n, type Locale } from './services/i18n';
@@ -24,6 +26,8 @@ const VIEWS: Record<ToolInfo['id'], ComponentType> = {
   consensus: ConsensusBuilder,
   whiteboard: TacticalWhiteboard,
   'mutual-aid': MutualAid,
+  'shift-roster': ShiftRoster,
+  'supply-inventory': SupplyInventory,
   'event-creator': EventCreator,
   'phone-tree': PhoneTree,
   'secure-share': SecureShare,

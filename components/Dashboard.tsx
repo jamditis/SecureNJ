@@ -13,7 +13,9 @@ import {
   keyOfConfirmation,
   keyOfId,
 } from '../services/schema';
+import { countGaps, isShift, isShiftSignup, keyOfSignup } from '../services/shifts';
 import { needsAttention } from '../services/status';
+import { countLow, isSupplyAdjustment, isSupplyItem } from '../services/supplies';
 import { useRecords, useSync } from '../services/sync';
 import { useNow } from '../services/time';
 import { TOOLS } from '../tools';
@@ -35,6 +37,10 @@ export default function Dashboard({ onSelectTool, onOpenSpace }: DashboardProps)
   const { records: proposals } = useRecords('proposals', isProposal, keyOfId);
   const { records: posts } = useRecords('posts', isMutualAidPost, keyOfId);
   const { records: claims } = useRecords('claims', isAidClaim, keyOfClaim);
+  const { records: shifts } = useRecords('shifts', isShift, keyOfId);
+  const { records: signups } = useRecords('shiftSignups', isShiftSignup, keyOfSignup);
+  const { records: supplies } = useRecords('supplies', isSupplyItem, keyOfId);
+  const { records: adjustments } = useRecords('supplyAdjustments', isSupplyAdjustment, keyOfId);
 
   // What needs attention now, for each tool that has live data.
   const activity: Partial<Record<ToolId, string>> = {};
@@ -46,6 +52,10 @@ export default function Dashboard({ onSelectTool, onOpenSpace }: DashboardProps)
   if (openProposals > 0) activity.consensus = t('dashboard.proposals', { count: openProposals });
   const openRequests = posts.filter((p) => p.type === 'request' && statusOf(p.id, claims) === 'open').length;
   if (openRequests > 0) activity['mutual-aid'] = t('dashboard.requests', { count: openRequests });
+  const gaps = countGaps(shifts, signups, now);
+  if (gaps > 0) activity['shift-roster'] = t('dashboard.shifts', { count: gaps });
+  const low = countLow(supplies, adjustments);
+  if (low > 0) activity['supply-inventory'] = t('dashboard.supplies', { count: low });
 
   return (
     <div className="space-y-10">
