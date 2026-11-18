@@ -1,8 +1,8 @@
 /**
- * English text for the full UI. Keys are sorted by area.
- * Text in braces, for example {count}, is replaced at run time.
+ * English text for the app shell and the first eight tools. Keys are sorted
+ * by area. Text in braces, for example {count}, is replaced at run time.
  */
-const en = {
+const core = {
   'app.name': 'Resilience toolkit',
 
   'common.anonymous': 'A member',
@@ -309,4 +309,4 @@ const en = {
   'share.note': 'AES-256-GCM with a key from PBKDF2-SHA-256 (600,000 rounds). The work is done in this browser. The security depends on the passphrase: use the dice button.',
 } as const;
 
-export default en;
+export default core;

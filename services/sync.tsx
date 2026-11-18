@@ -24,6 +24,7 @@ import { WebrtcProvider } from 'y-webrtc';
 import { Awareness } from 'y-protocols/awareness';
 import { ICE_SERVER_URLS } from './config';
 import { useT } from './i18n';
+import { eraseDevice } from './wipe';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 import { purgeExpired } from './retention';
 import {
@@ -40,8 +41,16 @@ const PRIVATE_DB = 'snj-private';
 const SWEEP_INTERVAL_MS = 30_000;
 const DATABASE_TIMEOUT_MS = 10_000;
 const DELETE_TIMEOUT_MS = 3_000;
-/** Tabs of one browser use this channel to leave a space together. */
-const LEAVE_CHANNEL = 'snj-leave';
+/** Tabs of one browser use this channel to leave a space or to erase the device together. */
+const TAB_CHANNEL = 'snj-tabs';
+type TabMessage = { type: 'leave'; dbName: string } | { type: 'erase' };
+
+function tellOtherTabs(message: TabMessage): void {
+  if (typeof BroadcastChannel === 'undefined') return;
+  const channel = new BroadcastChannel(TAB_CHANNEL);
+  channel.postMessage(message);
+  channel.close();
+}
 
 /** `none`: no server is set. `connecting`: no server answers. */
 export type SignalingState = 'none' | 'connecting' | 'connected';
@@ -65,6 +74,8 @@ export interface SyncValue {
   join: (config: SpaceConfig, remember: boolean) => void;
   /** Resolves to false if the delete of the local copy is not complete yet. */
   leave: (deleteLocalCopy: boolean) => Promise<boolean>;
+  /** Deletes all data of the app from this browser, in all tabs. */
+  erase: () => Promise<void>;
 }
 
 export const SyncContext = createContext<SyncValue | null>(null);
@@ -216,29 +227,33 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [config, setConfig] = useState<SpaceConfig | null>(() => loadSavedSpace(sessionStorage, localStorage));
   const [session, setSession] = useState<Session | null>(null);
-  const [privateDoc, setPrivateDoc] = useState<Y.Doc | null>(null);
+  const [privateSession, setPrivateSession] = useState<{ doc: Y.Doc; close: () => void } | null>(null);
   const [peers, setPeers] = useState(0);
   const [signaling, setSignaling] = useState<SignalingState>('none');
   const [failed, setFailed] = useState(false);
   const [spaceFailed, setSpaceFailed] = useState(false);
   const [memberName, setMemberNameState] = useState(() => loadMemberName(localStorage));
+  /** Set when this browser was erased. `complete` is false while a delete waits for a different tab. */
+  const [erased, setErased] = useState<{ complete: boolean; here: boolean } | null>(null);
 
   useEffect(() => {
     const doc = new Y.Doc();
     const persistence = new IndexeddbPersistence(PRIVATE_DB, doc);
     const housekeeping = startHousekeeping(doc, persistence, false);
-    let cancelled = false;
-    // The database never reports that it is not available, so use a time limit.
-    withTimeout(persistence.whenSynced, DATABASE_TIMEOUT_MS).then(
-      () => !cancelled && setPrivateDoc(doc),
-      () => !cancelled && setFailed(true),
-    );
-    return () => {
-      cancelled = true;
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
       housekeeping.stop();
       void persistence.destroy();
       doc.destroy();
     };
+    // The database never reports that it is not available, so use a time limit.
+    withTimeout(persistence.whenSynced, DATABASE_TIMEOUT_MS).then(
+      () => !closed && setPrivateSession({ doc, close }),
+      () => !closed && setFailed(true),
+    );
+    return close;
   }, []);
 
   useEffect(() => {
@@ -278,19 +293,26 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     };
   }, [config]);
 
-  // When one tab leaves a space, the other tabs of this browser leave it too.
-  // An open tab would keep the connection and would block the delete.
+  // When one tab leaves a space or erases the device, the other tabs of this
+  // browser do the same. An open tab would keep the connection and would
+  // block the delete of the database.
   useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined' || !session) return;
-    const channel = new BroadcastChannel(LEAVE_CHANNEL);
-    channel.onmessage = (event: MessageEvent<unknown>) => {
-      if (event.data === session.dbName) {
+    if (typeof BroadcastChannel === 'undefined' || !session || !privateSession) return;
+    const channel = new BroadcastChannel(TAB_CHANNEL);
+    channel.onmessage = (event: MessageEvent<TabMessage>) => {
+      if (event.data.type === 'leave' && event.data.dbName === session.dbName) {
         clearSavedSpace(sessionStorage, localStorage);
         setConfig(null);
       }
+      if (event.data.type === 'erase') {
+        session.close();
+        privateSession.close();
+        sessionStorage.clear();
+        setErased({ complete: true, here: false });
+      }
     };
     return () => channel.close();
-  }, [session]);
+  }, [session, privateSession]);
 
   const join = useCallback((next: SpaceConfig, remember: boolean) => {
     saveSpace(next, remember, sessionStorage, localStorage);
@@ -303,11 +325,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (!session || !config) return true;
       const { dbName } = session;
       clearSavedSpace(sessionStorage, localStorage);
-      if (typeof BroadcastChannel !== 'undefined') {
-        const channel = new BroadcastChannel(LEAVE_CHANNEL);
-        channel.postMessage(dbName);
-        channel.close();
-      }
+      tellOtherTabs({ type: 'leave', dbName });
       session.close();
       setConfig(null);
       if (!deleteLocalCopy) return true;
@@ -323,6 +341,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [session, config],
   );
 
+  const erase = useCallback(async () => {
+    tellOtherTabs({ type: 'erase' });
+    // An open database blocks its delete, so close both documents first.
+    session?.close();
+    privateSession?.close();
+    setSession(null);
+    const result = await eraseDevice();
+    setErased({ complete: result.complete, here: true });
+  }, [session, privateSession]);
+
   const setMemberName = useCallback((name: string) => {
     saveMemberName(localStorage, name);
     setMemberNameState(name.trim());
@@ -330,10 +358,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SyncValue | null>(
     () =>
-      session && privateDoc
+      session && privateSession
         ? {
             doc: session.doc,
-            privateDoc,
+            privateDoc: privateSession.doc,
             awareness: session.awareness,
             memberId: session.memberId,
             memberName,
@@ -344,11 +372,28 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             spaceFailed,
             join,
             leave,
+            erase,
           }
         : null,
-    [session, privateDoc, memberName, setMemberName, config, peers, signaling, spaceFailed, join, leave],
+    [session, privateSession, memberName, setMemberName, config, peers, signaling, spaceFailed, join, leave, erase],
   );
 
+  if (erased) {
+    // This screen uses no stored data and no network, so it also shows with no connection.
+    return (
+      <div className="p-8 text-center space-y-4 max-w-md mx-auto">
+        <p className="font-bold text-slate-900">{t('erase.done')}</p>
+        {!erased.complete && <p className="text-sm text-amber-700">{t('erase.pending')}</p>}
+        {erased.here ? (
+          <button type="button" onClick={() => window.location.reload()} className="underline text-sm text-slate-600">
+            {t('erase.restart')}
+          </button>
+        ) : (
+          <p className="text-sm text-slate-600">{t('erase.otherTab')}</p>
+        )}
+      </div>
+    );
+  }
   if (failed) {
     return <p className="p-8 text-center text-red-700">{t('sync.failed')}</p>;
   }

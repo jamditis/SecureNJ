@@ -20,6 +20,7 @@ export function createTestSync(overrides: Partial<SyncValue> = {}): SyncValue {
     spaceFailed: false,
     join: () => {},
     leave: async () => true,
+    erase: async () => {},
     ...overrides,
   };
 }

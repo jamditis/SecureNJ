@@ -1,7 +1,8 @@
 import { useState, type ComponentType } from 'react';
-import { HardDrive, LayoutDashboard, Menu, Shield, Users, X } from 'lucide-react';
+import { Database, HardDrive, Languages, LayoutDashboard, Menu, Shield, Users, X } from 'lucide-react';
 import ConsensusBuilder from './components/ConsensusBuilder';
 import Dashboard from './components/Dashboard';
+import DeviceDialog from './components/DeviceDialog';
 import EventCreator from './components/EventCreator';
 import MutualAid from './components/MutualAid';
 import PhoneTree from './components/PhoneTree';
@@ -11,7 +12,8 @@ import SpaceDialog from './components/SpaceDialog';
 import StatusBoard from './components/StatusBoard';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
 import { Notice } from './components/ui';
-import { useT } from './services/i18n';
+import { LOCALES, useI18n, type Locale } from './services/i18n';
+import { readInvite } from './services/invite';
 import { useSync } from './services/sync';
 import { TOOLS, type ToolInfo } from './tools';
 import type { ToolId } from './types';
@@ -28,11 +30,19 @@ const VIEWS: Record<ToolInfo['id'], ComponentType> = {
 };
 
 export default function App() {
-  const t = useT();
+  const { t, locale, setLocale } = useI18n();
   const { space, peers, spaceFailed } = useSync();
+  // An invite link opens the space dialog. The invite is then removed from the
+  // address, so that it is not in the history or in a copied address.
+  const [invite] = useState(() => {
+    const found = readInvite(window.location.hash, window.location.protocol === 'https:');
+    if (found) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    return found;
+  });
   const [activeTool, setActiveTool] = useState<ToolId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSpaceOpen, setIsSpaceOpen] = useState(false);
+  const [isSpaceOpen, setIsSpaceOpen] = useState(invite !== null && space === null);
+  const [isDeviceOpen, setIsDeviceOpen] = useState(false);
 
   const navItems = [{ id: 'dashboard' as ToolId, label: t('nav.overview'), icon: LayoutDashboard }].concat(
     TOOLS.map((tool) => ({ id: tool.id, label: t(tool.title), icon: tool.icon })),
@@ -94,6 +104,28 @@ export default function App() {
               </span>
               <span className="block text-xs text-slate-400 mt-1">{space ? t('nav.spacePeers', { count: peers }) : t('nav.spaceJoin')}</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setIsDeviceOpen(true)}
+              className="w-full flex items-center gap-2 px-4 py-2 rounded-xl text-left text-sm hover:bg-slate-800 hover:text-white transition-colors"
+            >
+              <Database className="w-4 h-4" aria-hidden="true" /> {t('device.open')}
+            </button>
+            <label className="flex items-center gap-2 px-4 text-sm">
+              <Languages className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="sr-only">{t('language.label')}</span>
+              <select
+                value={locale}
+                onChange={(event) => setLocale(event.target.value as Locale)}
+                className="flex-1 bg-slate-800 text-white rounded-lg px-2 py-1.5 text-sm"
+              >
+                {(Object.keys(LOCALES) as Locale[]).map((code) => (
+                  <option key={code} value={code} lang={code}>
+                    {LOCALES[code].label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <p className="text-xs leading-relaxed text-slate-500">{t('nav.privacy')}</p>
           </div>
         </div>
@@ -106,7 +138,8 @@ export default function App() {
         </div>
       </main>
 
-      {isSpaceOpen && <SpaceDialog onClose={() => setIsSpaceOpen(false)} />}
+      {isSpaceOpen && <SpaceDialog onClose={() => setIsSpaceOpen(false)} invite={space ? null : invite} />}
+      {isDeviceOpen && <DeviceDialog onClose={() => setIsDeviceOpen(false)} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import en from '../locales/en';
+import en from '../locales/en/index';
 import { makeTranslate } from './i18n';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 
