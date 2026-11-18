@@ -1,5 +1,13 @@
-
-export type ToolId = 'dashboard' | 'event-creator' | 'phone-tree' | 'mutual-aid' | 'secure-share' | 'safety-alerts' | 'consensus' | 'whiteboard' | 'status-board';
+export type ToolId =
+  | 'dashboard'
+  | 'safety-alerts'
+  | 'status-board'
+  | 'consensus'
+  | 'whiteboard'
+  | 'event-creator'
+  | 'phone-tree'
+  | 'mutual-aid'
+  | 'secure-share';
 
 export interface EventDetails {
   title: string;
@@ -9,13 +17,17 @@ export interface EventDetails {
   safetyInfo: string;
 }
 
+export type ContactRole = 'Lead' | 'Member';
+
 export interface Contact {
   id: string;
   name: string;
   contact: string;
-  role: string;
+  role: ContactRole;
   notes: string;
 }
+
+export type AidStatus = 'open' | 'claimed' | 'done';
 
 export interface MutualAidPost {
   id: string;
@@ -25,14 +37,37 @@ export interface MutualAidPost {
   description: string;
   contact: string;
   timestamp: number;
+  urgent: boolean;
+  status: AidStatus;
+  /** The display name of the member who claimed the post. */
+  claimedBy: string;
 }
+
+export type SightingType = 'raid' | 'checkpoint' | 'surveillance' | 'other';
 
 export interface Sighting {
   id: string;
-  type: 'raid' | 'checkpoint' | 'surveillance' | 'other';
+  type: SightingType;
   location: string;
+  /** What the people are doing. */
   description: string;
+  /** How many people and vehicles. */
+  size: string;
+  /** Clothing, markings, agency. */
+  uniform: string;
+  /** Vehicles, plates, tools. */
+  equipment: string;
   timestamp: number;
+  /** The member ID of the reporter. A reporter cannot confirm their own report. */
+  reporterId: string;
+  /** Set when a member marks the location as clear. */
+  clearedAt: number | null;
+}
+
+/** "I see it too." Stored with the key `${sightingId}:${memberId}`. */
+export interface Confirmation {
+  sightingId: string;
+  memberId: string;
 }
 
 export interface Proposal {
@@ -44,16 +79,37 @@ export interface Proposal {
 
 export type VoteType = 'support' | 'reservations' | 'stand-aside' | 'block';
 
+/** Stored with the key `${proposalId}:${memberId}`, so each member has one vote. */
+export interface Vote {
+  proposalId: string;
+  memberId: string;
+  type: VoteType;
+  /** The reason for a reservation or a block. */
+  concern: string;
+  /** The display name of the voter at the time of the vote. */
+  name: string;
+}
+
+export type MemberStatus = 'safe' | 'transit' | 'support' | 'detained';
+
 export interface StatusUser {
   id: string;
   name: string;
-  status: 'safe' | 'transit' | 'support' | 'arrested' | 'offline';
-  lastUpdated: number;
+  status: MemberStatus;
   note: string;
+  lastUpdated: number;
+  /** The time by which the member promised to check in again. */
+  checkInBy: number | null;
 }
 
 export interface WhiteboardStroke {
+  id: string;
+  /** The member ID of the author. Undo removes only your own strokes. */
+  by: string;
+  timestamp: number;
+  /** x0, y0, x1, y1, ... as fractions of the board width. */
   points: number[];
   color: string;
+  /** Line width as a fraction of the board width. */
   width: number;
 }

@@ -1,284 +1,187 @@
+import { useMemo, useState, type FormEvent } from 'react';
+import { Archive, CheckCircle2, Hand, Lock, Plus, ThumbsUp, Trash2, Unlock, XOctagon, type LucideIcon } from 'lucide-react';
+import { tallyVotes, voteKey, type Outcome } from '../services/consensus';
+import { useT } from '../services/i18n';
+import { isProposal, isVote } from '../services/schema';
+import { useRecords, useSync } from '../services/sync';
+import type { Proposal, Vote, VoteType } from '../types';
+import { Button, EmptyState, IconButton, ToolHeader, inputClass } from './ui';
 
-import React, { useState, useEffect, useRef } from 'react';
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
-import { IndexeddbPersistence } from 'y-indexeddb';
-import { 
-  ThumbsUp, 
-  Hand, 
-  PauseCircle, 
-  XOctagon, 
-  Plus, 
-  Trash2, 
-  Wifi, 
-  WifiOff, 
-  Archive,
-  CheckCircle2
-} from 'lucide-react';
-import { Proposal, VoteType } from '../types';
+const OPTIONS: { type: VoteType; icon: LucideIcon; idle: string; active: string; bar: string }[] = [
+  { type: 'support', icon: ThumbsUp, idle: 'bg-emerald-50 text-emerald-700 border-emerald-200', active: 'bg-emerald-600 text-white border-emerald-700', bar: 'bg-emerald-500' },
+  { type: 'reservations', icon: CheckCircle2, idle: 'bg-yellow-50 text-yellow-800 border-yellow-200', active: 'bg-yellow-500 text-white border-yellow-600', bar: 'bg-yellow-400' },
+  { type: 'stand-aside', icon: Hand, idle: 'bg-blue-50 text-blue-700 border-blue-200', active: 'bg-blue-600 text-white border-blue-700', bar: 'bg-blue-400' },
+  { type: 'block', icon: XOctagon, idle: 'bg-red-50 text-red-700 border-red-200', active: 'bg-red-600 text-white border-red-700', bar: 'bg-red-500' },
+];
 
-const ROOM_NAME = 'consensus-v1';
+const OUTCOME_STYLE: Record<Outcome, string> = {
+  none: 'text-slate-400',
+  blocked: 'text-red-700',
+  reservations: 'text-yellow-700',
+  consensus: 'text-emerald-700',
+  'no-support': 'text-slate-600',
+};
 
-const ConsensusBuilder: React.FC = () => {
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [votes, setVotes] = useState<Record<string, Record<string, VoteType>>>({});
-  const [peers, setPeers] = useState(0);
-  const [myId, setMyId] = useState('');
-  const [newProposalText, setNewProposalText] = useState('');
+export default function ConsensusBuilder() {
+  const t = useT();
+  const { doc, memberId, memberName } = useSync();
+  const { records: proposals, map: proposalMap } = useRecords('proposals', isProposal);
+  const { records: votes, map: voteMap } = useRecords('votes', isVote);
+  const [text, setText] = useState('');
 
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const proposalsMapRef = useRef<Y.Map<Proposal> | null>(null);
-  const votesMapRef = useRef<Y.Map<string> | null>(null); // Key: "proposalId:userId", Value: VoteType
+  const sorted = useMemo(
+    () => [...proposals].sort((a, b) => Number(a.status === 'closed') - Number(b.status === 'closed') || b.timestamp - a.timestamp),
+    [proposals],
+  );
 
-  useEffect(() => {
-    // Generate a persistent ID for this user's browser session
-    let id = localStorage.getItem('consensus_user_id');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('consensus_user_id', id);
-    }
-    setMyId(id);
-
-    const ydoc = new Y.Doc();
-    const proposalsMap = ydoc.getMap<Proposal>('proposals');
-    const votesMap = ydoc.getMap<string>('votes'); // Stores simpler string values
-
-    ydocRef.current = ydoc;
-    proposalsMapRef.current = proposalsMap;
-    votesMapRef.current = votesMap;
-
-    const indexeddbProvider = new IndexeddbPersistence(ROOM_NAME, ydoc);
-    const webrtcProvider = new WebrtcProvider(ROOM_NAME, ydoc, {
-      signaling: ['wss://signaling.yjs.dev', 'wss://y-webrtc-signaling-eu.herokuapp.com']
-    });
-
-    webrtcProvider.on('peers', ({ webrtcPeers }: any) => {
-      setPeers(webrtcPeers.size);
-    });
-
-    const updateState = () => {
-      // Update Proposals
-      const allProposals = Array.from(proposalsMap.values()) as Proposal[];
-      setProposals(allProposals.sort((a, b) => b.timestamp - a.timestamp));
-
-      // Update Votes
-      // Structure: { proposalId: { userId: voteType } }
-      const newVotes: Record<string, Record<string, VoteType>> = {};
-      votesMap.forEach((voteType, key) => {
-        const [propId, userId] = key.split(':');
-        if (!newVotes[propId]) newVotes[propId] = {};
-        newVotes[propId][userId] = voteType as VoteType;
-      });
-      setVotes(newVotes);
-    };
-
-    proposalsMap.observe(updateState);
-    votesMap.observe(updateState);
-    updateState();
-
-    return () => {
-      webrtcProvider.destroy();
-      indexeddbProvider.destroy();
-      ydoc.destroy();
-    };
-  }, []);
-
-  const addProposal = () => {
-    if (!newProposalText.trim() || !proposalsMapRef.current) return;
+  const add = (event: FormEvent) => {
+    event.preventDefault();
+    if (text.trim() === '') return;
     const id = crypto.randomUUID();
-    const proposal: Proposal = {
-      id,
-      text: newProposalText,
-      timestamp: Date.now(),
-      status: 'active'
-    };
-    proposalsMapRef.current.set(id, proposal);
-    setNewProposalText('');
+    proposalMap.set(id, { id, text: text.trim(), timestamp: Date.now(), status: 'active' });
+    setText('');
   };
 
-  const castVote = (proposalId: string, type: VoteType) => {
-    if (!votesMapRef.current) return;
-    const key = `${proposalId}:${myId}`;
-    // Toggle off if clicking same vote
-    if (votes[proposalId]?.[myId] === type) {
-        votesMapRef.current.delete(key);
-    } else {
-        votesMapRef.current.set(key, type);
-    }
+  const castVote = (proposal: Proposal, type: VoteType) => {
+    const key = voteKey(proposal.id, memberId);
+    const current = voteMap.get(key);
+    // A second click on the same option removes the vote.
+    if (current?.type === type) voteMap.delete(key);
+    else voteMap.set(key, { proposalId: proposal.id, memberId, type, concern: current?.concern ?? '', name: memberName });
   };
 
-  const deleteProposal = (id: string) => {
-    proposalsMapRef.current?.delete(id);
-    // Cleanup votes for this proposal
-    if (votesMapRef.current) {
-        const keysToDelete: string[] = [];
-        votesMapRef.current.forEach((_, key) => {
-            if (key.startsWith(id + ':')) keysToDelete.push(key);
-        });
-        ydocRef.current?.transact(() => {
-            keysToDelete.forEach(k => votesMapRef.current?.delete(k));
-        });
-    }
+  const saveConcern = (vote: Vote, concern: string) => {
+    voteMap.set(voteKey(vote.proposalId, vote.memberId), { ...vote, concern: concern.trim() });
   };
 
-  const getVoteCounts = (proposalId: string) => {
-    const proposalVotes = votes[proposalId] || {};
-    const counts = { support: 0, reservations: 0, 'stand-aside': 0, block: 0, total: 0 };
-    Object.values(proposalVotes).forEach(v => {
-        counts[v]++;
-        counts.total++;
+  const remove = (proposal: Proposal) => {
+    if (!window.confirm(t('consensus.deleteConfirm'))) return;
+    doc.transact(() => {
+      proposalMap.delete(proposal.id);
+      voteMap.forEach((vote, key) => {
+        if (vote.proposalId === proposal.id) voteMap.delete(key);
+      });
     });
-    return counts;
   };
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            Consensus builder
-            {peers > 0 ? (
-              <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <Wifi className="w-3 h-3" /> Live ({peers})
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <WifiOff className="w-3 h-3" /> Offline
-              </span>
-            )}
-          </h2>
-          <p className="text-slate-500">Real-time democratic decision making and temperature checks.</p>
-        </div>
-      </div>
+      <ToolHeader title={t('consensus.title')} subtitle={t('consensus.subtitle')} />
 
-      {/* New Proposal Input */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-        <div className="flex gap-4">
-          <input 
-            type="text" 
-            value={newProposalText}
-            onChange={(e) => setNewProposalText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addProposal()}
-            placeholder="What is the proposal?"
-            className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-xl text-lg outline-none focus:ring-2 focus:ring-slate-900/10"
-          />
-          <button 
-            onClick={addProposal}
-            className="bg-slate-900 hover:bg-black text-white px-6 rounded-xl font-bold transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" /> Propose
-          </button>
-        </div>
-      </div>
+      <form onSubmit={add} className="bg-white p-4 rounded-3xl border border-slate-200 flex flex-col sm:flex-row gap-3">
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={t('consensus.placeholder')}
+          aria-label={t('consensus.placeholder')}
+          className={`${inputClass} flex-1`}
+        />
+        <Button type="submit" variant="dark">
+          <Plus className="w-5 h-5" aria-hidden="true" /> {t('consensus.propose')}
+        </Button>
+      </form>
 
-      {/* Active Proposals */}
       <div className="space-y-6">
-        {proposals.length === 0 ? (
-          <div className="text-center py-20 opacity-50">
-            <Archive className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-            <p className="text-lg font-medium text-slate-500">No active proposals.</p>
-          </div>
+        {sorted.length === 0 ? (
+          <EmptyState icon={Archive} title={t('consensus.empty')} />
         ) : (
-          proposals.map(prop => {
-            const counts = getVoteCounts(prop.id);
-            const myVote = votes[prop.id]?.[myId];
-            
+          sorted.map((proposal) => {
+            const proposalVotes = votes.filter((vote) => vote.proposalId === proposal.id);
+            const tally = tallyVotes(proposalVotes);
+            const mine = proposalVotes.find((vote) => vote.memberId === memberId);
+            const concerns = proposalVotes.filter((vote) => vote.concern !== '' && (vote.type === 'reservations' || vote.type === 'block'));
+            const closed = proposal.status === 'closed';
             return (
-              <div key={prop.id} className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-                <div className="flex justify-between items-start mb-6">
-                  <h3 className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">{prop.text}</h3>
-                  <button onClick={() => deleteProposal(prop.id)} className="text-slate-300 hover:text-red-500 p-2">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+              <article key={proposal.id} className={`bg-white p-6 rounded-3xl border border-slate-200 space-y-4 ${closed ? 'opacity-75' : ''}`}>
+                <div className="flex justify-between items-start gap-4">
+                  <h3 className="text-xl font-bold text-slate-900 leading-tight break-words min-w-0">{proposal.text}</h3>
+                  <div className="flex shrink-0">
+                    <IconButton
+                      icon={closed ? Unlock : Lock}
+                      label={closed ? t('consensus.reopen') : t('consensus.close')}
+                      onClick={() => proposalMap.set(proposal.id, { ...proposal, status: closed ? 'active' : 'closed' })}
+                    />
+                    <IconButton icon={Trash2} label={t('consensus.delete')} onClick={() => remove(proposal)} />
+                  </div>
                 </div>
 
-                {/* Vote Visualization Bar */}
-                <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex mb-2">
-                    {counts.total > 0 && (
-                        <>
-                            <div style={{ width: `${(counts.support / counts.total) * 100}%` }} className="bg-emerald-500 h-full transition-all duration-500" />
-                            <div style={{ width: `${(counts.reservations / counts.total) * 100}%` }} className="bg-yellow-400 h-full transition-all duration-500" />
-                            <div style={{ width: `${(counts['stand-aside'] / counts.total) * 100}%` }} className="bg-blue-400 h-full transition-all duration-500" />
-                            <div style={{ width: `${(counts.block / counts.total) * 100}%` }} className="bg-red-500 h-full transition-all duration-500" />
-                        </>
-                    )}
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex" aria-hidden="true">
+                  {tally.total > 0 &&
+                    OPTIONS.map((option) => (
+                      <div key={option.type} style={{ width: `${(tally[option.type] / tally.total) * 100}%` }} className={`${option.bar} h-full`} />
+                    ))}
                 </div>
-                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-8">
-                    <span>Total Votes: {counts.total}</span>
-                    <span>Consensus Meter</span>
-                </div>
+                <p className="flex flex-wrap justify-between gap-2 text-xs font-bold">
+                  <span className={OUTCOME_STYLE[tally.outcome]}>
+                    {closed ? `${t('consensus.closed')} · ` : ''}
+                    {t(`consensus.outcome.${tally.outcome}`)}
+                  </span>
+                  <span className="text-slate-400">{t('consensus.total', { count: tally.total })}</span>
+                </p>
 
-                {/* Voting Buttons */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <VoteButton 
-                        label="Strong Support" 
-                        color="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                        activeColor="bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/30"
-                        icon={ThumbsUp} 
-                        count={counts.support}
-                        isActive={myVote === 'support'}
-                        onClick={() => castVote(prop.id, 'support')}
-                    />
-                     <VoteButton 
-                        label="Reservations" 
-                        color="bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100"
-                        activeColor="bg-yellow-400 text-white border-yellow-500 shadow-yellow-400/30"
-                        icon={CheckCircle2} 
-                        count={counts.reservations}
-                        isActive={myVote === 'reservations'}
-                        onClick={() => castVote(prop.id, 'reservations')}
-                    />
-                    <VoteButton 
-                        label="Stand Aside" 
-                        color="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                        activeColor="bg-blue-500 text-white border-blue-600 shadow-blue-500/30"
-                        icon={Hand} 
-                        count={counts['stand-aside']}
-                        isActive={myVote === 'stand-aside'}
-                        onClick={() => castVote(prop.id, 'stand-aside')}
-                    />
-                    <VoteButton 
-                        label="Block" 
-                        color="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                        activeColor="bg-red-500 text-white border-red-600 shadow-red-500/30"
-                        icon={XOctagon} 
-                        count={counts.block}
-                        isActive={myVote === 'block'}
-                        onClick={() => castVote(prop.id, 'block')}
-                    />
+                  {OPTIONS.map(({ type, icon: Icon, idle, active }) => (
+                    <button
+                      key={type}
+                      type="button"
+                      disabled={closed}
+                      aria-pressed={mine?.type === type}
+                      onClick={() => castVote(proposal, type)}
+                      className={`p-3 rounded-xl border-2 font-bold text-sm flex flex-col items-center gap-1 transition-colors disabled:cursor-not-allowed ${mine?.type === type ? active : idle}`}
+                    >
+                      <Icon className="w-5 h-5" aria-hidden="true" />
+                      {t(`consensus.vote.${type}`)}
+                      <span className="text-xs font-normal">{tally[type]}</span>
+                    </button>
+                  ))}
                 </div>
-              </div>
+
+                {!closed && mine && (mine.type === 'reservations' || mine.type === 'block') && (
+                  <ConcernForm key={mine.type} vote={mine} onSave={(concern) => saveConcern(mine, concern)} />
+                )}
+
+                {concerns.length > 0 && (
+                  <ul className="space-y-2 text-sm">
+                    {concerns.map((vote) => (
+                      <li key={vote.memberId} className={`p-3 rounded-xl break-words ${vote.type === 'block' ? 'bg-red-50 text-red-900' : 'bg-yellow-50 text-yellow-900'}`}>
+                        <strong>
+                          {vote.name || t('common.anonymous')} ({t(`consensus.vote.${vote.type}`)}):
+                        </strong>{' '}
+                        {vote.concern}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </article>
             );
           })
         )}
       </div>
     </div>
   );
-};
-
-interface VoteButtonProps {
-    label: string;
-    color: string;
-    activeColor: string;
-    icon: any;
-    count: number;
-    isActive: boolean;
-    onClick: () => void;
 }
 
-const VoteButton: React.FC<VoteButtonProps> = ({ label, color, activeColor, icon: Icon, count, isActive, onClick }) => (
-    <button 
-        onClick={onClick}
-        className={`relative p-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${isActive ? activeColor + ' shadow-lg transform scale-105' : color}`}
+function ConcernForm({ vote, onSave }: { vote: Vote; onSave: (concern: string) => void }) {
+  const t = useT();
+  const [concern, setConcern] = useState(vote.concern);
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(concern);
+      }}
+      className="flex flex-col sm:flex-row gap-2"
     >
-        <Icon className="w-6 h-6" />
-        <span className="text-sm">{label}</span>
-        {count > 0 && (
-            <span className="absolute top-2 right-2 text-xs bg-white/30 px-1.5 py-0.5 rounded-md backdrop-blur-sm">
-                {count}
-            </span>
-        )}
-    </button>
-);
-
-export default ConsensusBuilder;
+      <input
+        value={concern}
+        onChange={(event) => setConcern(event.target.value)}
+        placeholder={t('consensus.concernHint')}
+        aria-label={t('consensus.concernHint')}
+        className={`${inputClass} flex-1`}
+      />
+      <Button type="submit" variant="light" disabled={concern.trim() === vote.concern}>
+        {t('consensus.saveConcern')}
+      </Button>
+    </form>
+  );
+}

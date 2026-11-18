@@ -1,334 +1,213 @@
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { Clock, Eye, MapPin, Settings, ShieldAlert, ShieldCheck, Siren, Trash2 } from 'lucide-react';
+import { alertState, confirmationKey, countConfirmations } from '../services/alerts';
+import { useLocale, useT } from '../services/i18n';
+import { usePurgeExpired } from '../services/retention';
+import { isConfirmation, isSighting } from '../services/schema';
+import { useRecords, useSharedSetting, useSync } from '../services/sync';
+import { timeAgo, useNow } from '../services/time';
+import type { Sighting, SightingType } from '../types';
+import { Button, EmptyState, Field, IconButton, Modal, Notice, ToolHeader, inputClass } from './ui';
 
-import React, { useState, useEffect, useRef } from 'react';
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
-import { IndexeddbPersistence } from 'y-indexeddb';
-import { 
-  AlertTriangle, 
-  MapPin, 
-  Clock, 
-  Trash2, 
-  Plus, 
-  Siren, 
-  Wifi, 
-  WifiOff, 
-  Settings, 
-  Info,
-  ShieldAlert,
-  Eye
-} from 'lucide-react';
-import { Sighting } from '../types';
+const TYPES: SightingType[] = ['raid', 'checkpoint', 'surveillance', 'other'];
+const RETENTION_HOURS = [1, 4, 12, 24];
+const DEFAULT_RETENTION_HOURS = 4;
 
-const ROOM_NAME = 'safety-alerts-v1';
+const TYPE_STYLE: Record<SightingType, string> = {
+  raid: 'bg-red-100 text-red-800 border-red-200',
+  checkpoint: 'bg-orange-100 text-orange-800 border-orange-200',
+  surveillance: 'bg-amber-100 text-amber-800 border-amber-200',
+  other: 'bg-slate-100 text-slate-800 border-slate-200',
+};
 
-const Sightings: React.FC = () => {
-  const [sightings, setSightings] = useState<Sighting[]>([]);
-  const [peers, setPeers] = useState(0);
-  const [isSynced, setIsSynced] = useState(false);
-  
-  // UI States
+const EMPTY_REPORT = { type: 'raid' as SightingType, location: '', description: '', size: '', uniform: '', equipment: '' };
+
+export default function Sightings() {
+  const t = useT();
+  const locale = useLocale();
+  const now = useNow();
+  const { doc, memberId, space } = useSync();
+  const { records: sightings, map } = useRecords('sightings', isSighting);
+  const { records: confirmations, map: confirmationMap } = useRecords('confirmations', isConfirmation);
+  const [retention, setRetention] = useSharedSetting('alertRetentionHours', DEFAULT_RETENTION_HOURS);
   const [isReporting, setIsReporting] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
-  // Settings
-  const [autoDeleteHours, setAutoDeleteHours] = useState(4); // Default to 4 hours for safety
+  const [showSettings, setShowSettings] = useState(false);
+  const [report, setReport] = useState(EMPTY_REPORT);
 
-  // Yjs References
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const ymapRef = useRef<Y.Map<Sighting> | null>(null);
-
-  const [newSighting, setNewSighting] = useState<Partial<Sighting>>({
-    type: 'raid',
-    location: '',
-    description: ''
-  });
-
-  useEffect(() => {
-    const ydoc = new Y.Doc();
-    const ymap = ydoc.getMap<Sighting>('sightings');
-    
-    ydocRef.current = ydoc;
-    ymapRef.current = ymap;
-
-    // 1. Persistence
-    const indexeddbProvider = new IndexeddbPersistence(ROOM_NAME, ydoc);
-    indexeddbProvider.on('synced', () => setIsSynced(true));
-
-    // 2. Network Sync
-    const webrtcProvider = new WebrtcProvider(ROOM_NAME, ydoc, {
-      signaling: ['wss://signaling.yjs.dev', 'wss://y-webrtc-signaling-eu.herokuapp.com']
-    });
-
-    webrtcProvider.on('peers', ({ webrtcPeers }: any) => {
-      setPeers(webrtcPeers.size);
-    });
-
-    // 3. Bind State
-    const updateState = () => {
-      const all = Array.from(ymap.values()) as Sighting[];
-      setSightings(all.sort((a, b) => b.timestamp - a.timestamp));
-    };
-
-    ymap.observe(updateState);
-    updateState();
-
-    return () => {
-      webrtcProvider.destroy();
-      indexeddbProvider.destroy();
-      ydoc.destroy();
-    };
-  }, []);
-
-  // Strict Auto-delete Logic
-  useEffect(() => {
-    if (!ymapRef.current) return;
-
-    const runCleanup = () => {
-      const now = Date.now();
-      const cutoff = now - (autoDeleteHours * 60 * 60 * 1000);
-      const ymap = ymapRef.current!;
-      
-      ydocRef.current?.transact(() => {
-        ymap.forEach((item, key) => {
-          if (item.timestamp < cutoff) {
-            ymap.delete(key);
-          }
+  /** Deletes reports and the confirmations that belong to them. */
+  const remove = useCallback(
+    (ids: string[]) => {
+      doc.transact(() => {
+        ids.forEach((id) => map.delete(id));
+        confirmationMap.forEach((confirmation, key) => {
+          if (ids.includes(confirmation.sightingId)) confirmationMap.delete(key);
         });
       });
-    };
+    },
+    [doc, map, confirmationMap],
+  );
+  usePurgeExpired(sightings, retention, remove);
 
-    // Run often (every 30s) given the sensitive nature of this data
-    const interval = setInterval(runCleanup, 30 * 1000);
-    return () => clearInterval(interval);
-  }, [autoDeleteHours]);
+  const sorted = useMemo(() => [...sightings].sort((a, b) => b.timestamp - a.timestamp), [sightings]);
 
-  const addSighting = () => {
-    if (!newSighting.location || !ymapRef.current) return;
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (report.location.trim() === '') return;
     const id = crypto.randomUUID();
-    const sighting: Sighting = {
-      ...(newSighting as Sighting),
-      id,
-      timestamp: Date.now(),
-      type: newSighting.type as 'raid' | 'checkpoint' | 'surveillance' | 'other'
-    };
-    
-    ymapRef.current.set(id, sighting);
+    map.set(id, { ...report, id, timestamp: Date.now(), reporterId: memberId, clearedAt: null });
+    setReport(EMPTY_REPORT);
     setIsReporting(false);
-    setNewSighting({ type: 'raid', location: '', description: '' });
   };
 
-  const deleteSighting = (id: string) => {
-    ymapRef.current?.delete(id);
+  const toggleConfirm = (sighting: Sighting) => {
+    const key = confirmationKey(sighting.id, memberId);
+    if (confirmationMap.has(key)) confirmationMap.delete(key);
+    else confirmationMap.set(key, { sightingId: sighting.id, memberId });
   };
 
-  const timeAgo = (timestamp: number) => {
-    const minutes = Math.floor((Date.now() - timestamp) / 60000);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+  const toggleClear = (sighting: Sighting) => {
+    map.set(sighting.id, { ...sighting, clearedAt: sighting.clearedAt === null ? Date.now() : null });
   };
 
-  const getTypeStyle = (type: string) => {
-    switch (type) {
-      case 'raid': return 'bg-red-100 text-red-800 border-red-200';
-      case 'checkpoint': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'surveillance': return 'bg-amber-100 text-amber-800 border-amber-200';
-      default: return 'bg-slate-100 text-slate-800 border-slate-200';
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'raid': return 'Active raid';
-      case 'checkpoint': return 'Checkpoint';
-      case 'surveillance': return 'Surveillance';
-      default: return 'Other activity';
-    }
-  };
+  const text = (key: keyof typeof EMPTY_REPORT) => ({
+    value: report[key],
+    onChange: (event: { target: { value: string } }) => setReport({ ...report, [key]: event.target.value }),
+    className: inputClass,
+  });
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            Safety alerts
-            {peers > 0 ? (
-              <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <Wifi className="w-3 h-3" /> Live ({peers})
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <WifiOff className="w-3 h-3" /> Offline
-              </span>
-            )}
-          </h2>
-          <p className="text-slate-500">Real-time alerts about enforcement activity. Data deletes automatically.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setIsReporting(true)}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center gap-2 animate-pulse"
-          >
-            <Siren className="w-5 h-5" /> Report sighting
-          </button>
-        </div>
-      </div>
+      <ToolHeader title={t('alerts.title')} subtitle={t('alerts.subtitle', { hours: retention })}>
+        <IconButton icon={Settings} label={t('alerts.settings')} onClick={() => setShowSettings(!showSettings)} />
+        <Button variant="danger" onClick={() => setIsReporting(true)}>
+          <Siren className="w-5 h-5" aria-hidden="true" /> {t('alerts.report')}
+        </Button>
+      </ToolHeader>
 
-      {/* Settings Panel */}
-      {isSettingsOpen && (
-        <div className="bg-white border border-slate-200 p-6 rounded-3xl animate-in slide-in-from-top-2">
-          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Settings className="w-4 h-4" /> Alert settings
-          </h3>
-          <div className="flex items-center gap-4">
-            <label className="text-sm text-slate-600 font-medium">Auto-delete alerts after:</label>
-            <select 
-              value={autoDeleteHours}
-              onChange={(e) => setAutoDeleteHours(Number(e.target.value))}
-              className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-bold"
-            >
-              <option value={1}>1 hour</option>
-              <option value={4}>4 hours (Recommended)</option>
-              <option value={12}>12 hours</option>
-              <option value={24}>24 hours</option>
+      {showSettings && (
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl space-y-3">
+          <Field label={t('alerts.retention')}>
+            <select value={retention} onChange={(event) => setRetention(Number(event.target.value))} className={inputClass}>
+              {RETENTION_HOURS.map((hours) => (
+                <option key={hours} value={hours}>
+                  {t('alerts.retentionOption', { hours })}
+                </option>
+              ))}
             </select>
-          </div>
-          <p className="text-xs text-slate-400 mt-2">
-            Alerts are ephemeral. Short retention windows protect the community and ensure map accuracy.
-          </p>
+          </Field>
+          <Notice>{t('alerts.retentionNote')}</Notice>
         </div>
       )}
 
-      {/* Alert List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sightings.length === 0 ? (
-          <div className="col-span-full py-20 text-center bg-white rounded-[2.5rem] border border-slate-100">
-            <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ShieldAlert className="w-10 h-10 text-emerald-500" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">No active threats reported</h3>
-            <p className="text-slate-500 max-w-sm mx-auto mt-2">
-              The area is currently clear of reported activity. Stay vigilant and report if you see something.
-            </p>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {sorted.length === 0 ? (
+          <EmptyState icon={ShieldAlert} title={t('alerts.empty')} text={t('alerts.emptyNote')} />
         ) : (
-          sightings.map(item => (
-            <div key={item.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative group overflow-hidden">
-              <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.type === 'raid' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
-              <div className="flex justify-between items-start mb-4 pt-2">
-                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${getTypeStyle(item.type)}`}>
-                  {getTypeLabel(item.type)}
-                </span>
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> {timeAgo(item.timestamp)}
-                </span>
-              </div>
-
-              <h4 className="font-bold text-slate-900 text-lg mb-2 flex items-start gap-2">
-                <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                {item.location}
-              </h4>
-              
-              <p className="text-slate-600 text-sm leading-relaxed mb-4 pl-7">
-                {item.description}
-              </p>
-
-              <div className="pt-4 border-t border-slate-50 flex justify-end">
-                <button 
-                  onClick={() => deleteSighting(item.id)}
-                  className="text-slate-300 hover:text-slate-500 text-xs font-bold flex items-center gap-1 transition-colors"
+          sorted.map((item) => {
+            const state = alertState(item, confirmations);
+            const count = countConfirmations(item, confirmations);
+            const mine = item.reporterId === memberId;
+            const confirmedByMe = confirmationMap.has(confirmationKey(item.id, memberId));
+            const details = (['size', 'uniform', 'equipment'] as const).filter((key) => item[key] !== '');
+            return (
+              <article
+                key={item.id}
+                className={`bg-white p-6 rounded-3xl border shadow-sm space-y-3 ${state === 'cleared' ? 'border-slate-200 opacity-70' : state === 'confirmed' ? 'border-red-300' : 'border-slate-200'}`}
+              >
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${TYPE_STYLE[item.type]}`}>
+                    {t(`alerts.type.${item.type}`)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" aria-hidden="true" /> {timeAgo(item.timestamp, now, locale)}
+                  </span>
+                </div>
+                <p
+                  className={`text-xs font-bold ${state === 'cleared' ? 'text-emerald-700' : state === 'confirmed' ? 'text-red-700' : 'text-amber-700'}`}
                 >
-                  <Trash2 className="w-3 h-3" /> Dismiss
-                </button>
-              </div>
-            </div>
-          ))
+                  {state === 'confirmed' ? t('alerts.state.confirmed', { count }) : t(`alerts.state.${state}`)}
+                </p>
+                <h3 className="font-bold text-slate-900 text-lg flex items-start gap-2">
+                  <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="break-words min-w-0">{item.location}</span>
+                </h3>
+                {item.description && <p className="text-slate-600 text-sm break-words whitespace-pre-wrap">{item.description}</p>}
+                {details.length > 0 && (
+                  <dl className="text-xs text-slate-600 space-y-1">
+                    {details.map((key) => (
+                      <div key={key}>
+                        <dt className="inline font-bold">{t(`alerts.field.${key}`)}: </dt>
+                        <dd className="inline break-words">{item[key]}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                  <Button
+                    variant={confirmedByMe ? 'dark' : 'light'}
+                    className="!px-3 !py-1.5 !text-xs"
+                    disabled={mine || state === 'cleared'}
+                    title={mine ? t('alerts.ownReport') : undefined}
+                    aria-pressed={confirmedByMe}
+                    onClick={() => toggleConfirm(item)}
+                  >
+                    <Eye className="w-4 h-4" aria-hidden="true" /> {t('alerts.confirm')}
+                  </Button>
+                  <Button variant="light" className="!px-3 !py-1.5 !text-xs" onClick={() => toggleClear(item)}>
+                    <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                    {item.clearedAt === null ? t('alerts.markClear') : t('alerts.reopen')}
+                  </Button>
+                  <IconButton icon={Trash2} label={t('alerts.remove')} className="ml-auto" onClick={() => remove([item.id])} />
+                </div>
+              </article>
+            );
+          })
         )}
       </div>
 
-      {/* Report Modal */}
       {isReporting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-red-900/20 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl space-y-6">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <Siren className="w-8 h-8 text-red-600" />
-              Report activity
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {['raid', 'checkpoint', 'surveillance', 'other'].map(type => (
-                   <button
-                    key={type}
-                    onClick={() => setNewSighting({ ...newSighting, type: type as any })}
-                    className={`py-3 px-4 rounded-xl font-bold text-sm border transition-all ${
-                      newSighting.type === type 
-                        ? 'bg-slate-900 text-white border-slate-900' 
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                   >
-                     {type.charAt(0).toUpperCase() + type.slice(1)}
-                   </button>
-                ))}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-widest">Location</label>
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="e.g. Intersection of 4th & King"
-                  value={newSighting.location}
-                  onChange={e => setNewSighting({ ...newSighting, location: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-medium outline-none focus:ring-2 focus:ring-red-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-widest">Description</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe vehicles, number of agents, or specific activity..."
-                  value={newSighting.description}
-                  onChange={e => setNewSighting({ ...newSighting, description: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm outline-none focus:ring-2 focus:ring-red-500/20"
-                />
-              </div>
-
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex gap-3 items-start">
-                <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  <strong>Safety first:</strong> Do not photograph agents if it endangers you. This report will be broadcast to all nearby users immediately.
-                </p>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setIsReporting(false)}
-                  className="flex-1 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+        <Modal title={t('alerts.reportTitle')} onClose={() => setIsReporting(false)}>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              {TYPES.map((type) => (
+                <Button
+                  key={type}
+                  variant={report.type === type ? 'dark' : 'light'}
+                  aria-pressed={report.type === type}
+                  onClick={() => setReport({ ...report, type })}
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={addSighting}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-red-600/20 transition-all"
-                >
-                  Broadcast alert
-                </button>
-              </div>
+                  {t(`alerts.type.${type}`)}
+                </Button>
+              ))}
             </div>
-          </div>
-        </div>
+            <Field label={t('alerts.field.location')}>
+              <input {...text('location')} autoFocus required placeholder={t('alerts.hint.location')} />
+            </Field>
+            <Field label={t('alerts.field.description')}>
+              <textarea {...text('description')} rows={2} placeholder={t('alerts.hint.description')} />
+            </Field>
+            <Field label={t('alerts.field.size')}>
+              <input {...text('size')} placeholder={t('alerts.hint.size')} />
+            </Field>
+            <Field label={t('alerts.field.uniform')}>
+              <input {...text('uniform')} placeholder={t('alerts.hint.uniform')} />
+            </Field>
+            <Field label={t('alerts.field.equipment')}>
+              <input {...text('equipment')} placeholder={t('alerts.hint.equipment')} />
+            </Field>
+            <Notice tone="warning">{t('alerts.safety')}</Notice>
+            <Notice>{space ? t('alerts.goesToSpace', { name: space.name }) : t('alerts.staysLocal')}</Notice>
+            <div className="flex gap-3">
+              <Button variant="ghost" className="flex-1" onClick={() => setIsReporting(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" variant="danger" className="flex-1">
+                {t('alerts.send')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
-};
-
-export default Sightings;
+}
