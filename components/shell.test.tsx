@@ -6,6 +6,7 @@ import es from '../locales/es/index';
 import { I18nContext, LOCALES, makeTranslate } from '../services/i18n';
 import { hasUnsavedWork, useUnsavedWork } from '../services/unsaved';
 import { TOOLS, readRoute } from '../tools';
+import LanguageSwitch from './LanguageSwitch';
 import LimitsPage from './LimitsPage';
 
 afterEach(() => {
@@ -28,6 +29,26 @@ describe('page about limits', () => {
     );
     expect(screen.getAllByRole('listitem')).toHaveLength(4 + 13 + 5);
     expect(screen.getByText('Los datos en tu dispositivo no están cifrados.')).toBeTruthy();
+  });
+});
+
+describe('language switch', () => {
+  const inSpanish = (ui: React.ReactElement) => (
+    <I18nContext.Provider value={{ locale: 'es', t: makeTranslate(LOCALES.es.messages), setLocale: () => {} }}>{ui}</I18nContext.Provider>
+  );
+
+  it('tells a reader of the Spanish text that a machine made it and that no person reviewed it', () => {
+    render(inSpanish(<LanguageSwitch />));
+    expect(screen.getByText(/traducción automática/)).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Avisar de un error' });
+    expect(link.getAttribute('href')).toBe('https://github.com/jamditis/SecureNJ/issues');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('shows no such note for English, which is the source text', () => {
+    render(<LanguageSwitch />);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByLabelText('Language')).toBeTruthy();
   });
 });
 

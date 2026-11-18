@@ -1,0 +1,76 @@
+name: Publish to the live site
+
+# Each push to main runs all checks and then publishes. A merge is a push.
+# No person step. "Run workflow" in the Actions tab publishes main again.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One publish at a time, in the order of the pushes.
+concurrency:
+  group: publish-live-site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # A manual run on a different branch does nothing.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # To write the build to the gh-pages branch, which GitHub Pages serves.
+      contents: write
+      # To ask GitHub Pages for a build, if the push did not start one.
+      pages: write
+    env:
+      # Optional repository variables (Settings, then "Secrets and variables", then "Variables").
+      VITE_SIGNALING_URLS: ${{ vars.VITE_SIGNALING_URLS }}
+      VITE_SITE_URL: ${{ vars.VITE_SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The same checks as CI. A build that fails a check is not published.
+      # The check makes the build in `dist/`, with the settings above.
+      - run: npm run check
+      - name: Write the build to the gh-pages branch
+        id: write
+        env:
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          git fetch --depth 1 origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add "$site" -B gh-pages origin/gh-pages
+          # Replace all files, and keep the history of the branch.
+          find "$site" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R dist/. "$site/"
+          # GitHub Pages must serve the files as they are.
+          touch "$site/.nojekyll"
+          cd "$site"
+          git config user.name "$ACTOR"
+          git config user.email "${ACTOR_ID}+${ACTOR}@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The live site already has this build."
+            exit 0
+          fi
+          git commit -m "Publish main at ${GITHUB_SHA::7}"
+          git push origin gh-pages
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      # A green run must mean that the live site changed. The push alone does
+      # not show that: a push from a workflow can fail to start a Pages build.
+      - name: Wait until the live site serves the build
+        if: steps.write.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/wait-for-live-site.sh "$VITE_SITE_URL" dist/index.html

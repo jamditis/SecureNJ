@@ -12,6 +12,8 @@
  */
 const CACHE_PREFIX = 'snj-app-';
 const CACHE = `${CACHE_PREFIX}v1`;
+// The site that this app replaces used this prefix for its caches, at the same address.
+const OLD_SITE_CACHE_PREFIX = 'securenj-';
 const PAGE = './index.html';
 // Many hosts send a "Vary" header. A saved file is selected by its address
 // only: the app has one version of each file for all browsers.
@@ -69,8 +71,11 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       // Cache storage is shared with other sites on the same origin. Remove
-      // only older caches of this app.
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key))))
+      // only older caches of this app and of the site that it replaces.
+      .then((keys) => {
+        const old = keys.filter((key) => (key.startsWith(CACHE_PREFIX) && key !== CACHE) || key.startsWith(OLD_SITE_CACHE_PREFIX));
+        return Promise.all(old.map((key) => caches.delete(key)));
+      })
       .then(() => self.clients.claim()),
   );
 });

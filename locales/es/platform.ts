@@ -5,6 +5,8 @@ const platform: Record<keyof typeof en, string> = {
   'app.title': 'Herramientas de resiliencia local',
 
   'language.label': 'Idioma',
+  'language.machineNote': 'Este texto es una traducción automática. Todavía no lo ha revisado una persona.',
+  'language.report': 'Avisar de un error',
 
   'device.open': 'Datos en este dispositivo',
   'device.backupTitle': 'Copia de seguridad',

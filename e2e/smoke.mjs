@@ -162,6 +162,8 @@ async function main() {
     await solo.evaluate(async () => {
       localStorage.setItem('other-app.key', 'keep');
       await caches.open('other-app-cache');
+      // The site that this app replaces left a cache with this prefix.
+      await caches.open('securenj-331fc8e428a0');
       await new Promise((resolve) => {
         indexedDB.open('other-app-db').onsuccess = (event) => {
           event.target.result.close();
