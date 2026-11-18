@@ -9,7 +9,7 @@ Read `docs/architecture.md` first. Read `docs/security.md` before you change `se
 - `npm run dev`: dev server on port 3000
 - `npm run check`: type check, lint, tests, build, end-to-end test. Run it before each commit.
 - `npm test`: unit and component tests only
-- `npm run e2e`: end-to-end test. Needs `npm run build` first.
+- `npm run e2e`: end-to-end test. It makes its own build.
 - `npm run signaling`: local signaling server on port 4444
 
 ## Files
@@ -44,11 +44,11 @@ Root:
 - `space.ts`: key derivation for a space, signaling address parser, saved space.
 - `crypto.ts`: passphrase encryption for text and files.
 - `passphrase.ts`: random passphrase.
-- `schema.ts`: type guards for records from peers and files.
-- `retention.ts`: expiry of shared records.
-- `alerts.ts`, `status.ts`, `consensus.ts`, `phoneTree.ts`, `whiteboard.ts`: logic for one tool each.
+- `schema.ts`: type guards and key functions for records from peers and files.
+- `retention.ts`: expiry of shared records (`purgeExpired`, run by `sync.tsx` at all times).
+- `alerts.ts`, `aid.ts`, `status.ts`, `consensus.ts`, `phoneTree.ts`, `whiteboard.ts`: logic for one tool each.
 - `eventExport.ts`: builds the event page.
-- `identity.ts`: member ID and display name.
+- `identity.ts`: member ID for each space, and display name.
 - `i18n.ts`: `useT`. `time.ts`: relative time. `download.ts`: save a file. `config.ts`: build settings.
 
 Other:
@@ -62,9 +62,10 @@ Other:
 
 - No user-visible text in components. Add a key to `locales/en.ts` and use `useT()`.
 - UI text and docs use sentence case and simple, direct English.
-- A tool reads shared data only through `useRecords` with a guard from `schema.ts`.
+- A tool reads shared data only through `useRecords` with a guard and a key function from `schema.ts`.
 - Do not read-modify-write a field that two members can change at the same time. Use one record for each member and action (see positions and confirmations).
-- A setting that causes deletes must be a shared setting (`useSharedSetting`).
+- A setting that causes deletes must be a shared setting (`useSharedSetting`), changed only by an explicit save.
+- A record type with child records must delete them with the parent and must be in `purgeExpired`.
 - No request to a different host. No CDN. The end-to-end test fails on one.
 - Do not state a security property in the UI or docs unless a test shows it.
 - Bug fix: write the failing test first.

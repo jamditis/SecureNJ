@@ -61,6 +61,13 @@ describe('event page', () => {
     expect(document.getElementById('view-location')!.querySelector('b')).toBeNull();
   });
 
+  it('accepts the passphrase with a space at the end', async () => {
+    const payload = await encryptText(JSON.stringify(event), 'six words for the event page');
+    const dom = openPage(buildEventPage(payload, labels));
+    await unlock(dom, 'six words for the event page ');
+    expect(dom.window.document.getElementById('details')!.hidden).toBe(false);
+  });
+
   it('shows an error for the wrong passphrase and keeps the event hidden', async () => {
     const payload = await encryptText(JSON.stringify(event), 'six words for the event page');
     const dom = openPage(buildEventPage(payload, labels));

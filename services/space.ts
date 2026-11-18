@@ -3,7 +3,7 @@
  * passphrase. All room identifiers come from these two values, so a person
  * who does not have the passphrase cannot find the room or read its messages.
  */
-import { KDF_ITERATIONS } from './crypto';
+import { KDF_ITERATIONS, normalizePassphrase } from './crypto';
 
 export interface SpaceConfig {
   name: string;
@@ -43,7 +43,7 @@ export async function deriveSpaceKeys(name: string, passphrase: string): Promise
   const subtle = globalThis.crypto.subtle;
   const material = await subtle.importKey(
     'raw',
-    encoder.encode(passphrase.normalize('NFKC').trim()),
+    encoder.encode(normalizePassphrase(passphrase)),
     'PBKDF2',
     false,
     ['deriveBits'],
@@ -58,21 +58,28 @@ export async function deriveSpaceKeys(name: string, passphrase: string): Promise
   return { roomId: `snj-${toHex(roomId)}`, roomPassword: toHex(roomPassword) };
 }
 
-function isWebSocketUrl(text: string): boolean {
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+function isUsableUrl(text: string, pageIsSecure: boolean): boolean {
   try {
-    const { protocol } = new URL(text);
-    return protocol === 'wss:' || protocol === 'ws:';
+    const { protocol, hostname } = new URL(text);
+    if (protocol === 'wss:') return true;
+    // A browser refuses ws:// from an HTTPS page, except to this computer.
+    return protocol === 'ws:' && (!pageIsSecure || LOCAL_HOSTS.includes(hostname));
   } catch {
     return false;
   }
 }
 
-/** Reads server addresses from text. Separators are spaces, commas, and new lines. */
-export function parseSignalingUrls(text: string): { urls: string[]; invalid: string[] } {
+/**
+ * Reads server addresses from text. Separators are spaces, commas, and new
+ * lines. `pageIsSecure` is true when the app is served over HTTPS.
+ */
+export function parseSignalingUrls(text: string, pageIsSecure = false): { urls: string[]; invalid: string[] } {
   const urls: string[] = [];
   const invalid: string[] = [];
   for (const entry of text.split(/[\s,]+/).filter(Boolean)) {
-    if (!isWebSocketUrl(entry)) invalid.push(entry);
+    if (!isUsableUrl(entry, pageIsSecure)) invalid.push(entry);
     else if (!urls.includes(entry)) urls.push(entry);
   }
   return { urls, invalid };

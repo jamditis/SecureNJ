@@ -21,12 +21,15 @@ interface StatusInput {
   name: string;
   status: MemberStatus;
   note: string;
-  /** Zero means that the member sets no check-in time. */
+  /** Zero means no check-in time. `KEEP_CHECK_IN` keeps the time in `current`. */
   checkInMinutes: number;
+  current: StatusUser | undefined;
 }
 
+export const KEEP_CHECK_IN = -1;
+
 /** Makes the record for a status update at the current time. */
-export function makeStatusUpdate({ id, name, status, note, checkInMinutes }: StatusInput): StatusUser {
+export function makeStatusUpdate({ id, name, status, note, checkInMinutes, current }: StatusInput): StatusUser {
   const now = Date.now();
   return {
     id,
@@ -34,6 +37,11 @@ export function makeStatusUpdate({ id, name, status, note, checkInMinutes }: Sta
     status,
     note: note.trim(),
     lastUpdated: now,
-    checkInBy: checkInMinutes > 0 ? now + checkInMinutes * 60_000 : null,
+    checkInBy:
+      checkInMinutes === KEEP_CHECK_IN
+        ? (current?.checkInBy ?? null)
+        : checkInMinutes > 0
+          ? now + checkInMinutes * 60_000
+          : null,
   };
 }

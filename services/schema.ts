@@ -4,6 +4,7 @@
  * stop the tool for the full group.
  */
 import type {
+  AidClaim,
   Confirmation,
   Contact,
   MutualAidPost,
@@ -56,12 +57,16 @@ export function isMutualAidPost(value: unknown): value is MutualAidPost {
   const v = fields(value);
   return (
     v !== null &&
-    strings(v, 'id', 'category', 'title', 'description', 'contact', 'claimedBy') &&
+    strings(v, 'id', 'category', 'title', 'description', 'contact') &&
     oneOf(v.type, ['request', 'offer']) &&
-    oneOf(v.status, ['open', 'claimed', 'done']) &&
     typeof v.urgent === 'boolean' &&
     time(v.timestamp)
   );
+}
+
+export function isAidClaim(value: unknown): value is AidClaim {
+  const v = fields(value);
+  return v !== null && strings(v, 'postId', 'claimedBy') && oneOf(v.status, ['claimed', 'done']);
 }
 
 export function isProposal(value: unknown): value is Proposal {
@@ -102,3 +107,13 @@ export function isContact(value: unknown): value is Contact {
   const v = fields(value);
   return v !== null && strings(v, 'id', 'name', 'contact', 'notes') && oneOf(v.role, ['Lead', 'Member']);
 }
+
+/**
+ * The map key that a record must have. `useRecords` ignores a record under
+ * a different key: delete and update use this key, so such a record could
+ * not be removed.
+ */
+export const keyOfId = (record: { id: string }) => record.id;
+export const keyOfConfirmation = (c: Confirmation) => `${c.sightingId}:${c.memberId}`;
+export const keyOfVote = (v: Vote) => `${v.proposalId}:${v.memberId}`;
+export const keyOfClaim = (c: AidClaim) => c.postId;

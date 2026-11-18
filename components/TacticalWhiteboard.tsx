@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'rea
 import { Download, Eraser, Trash2, Undo2 } from 'lucide-react';
 import { downloadBlob } from '../services/download';
 import { useT } from '../services/i18n';
-import { isWhiteboardStroke } from '../services/schema';
+import { isWhiteboardStroke, keyOfId } from '../services/schema';
 import { useRecords, useSync } from '../services/sync';
 import { BOARD_ASPECT, drawBoard, isFarEnough, isNearStroke, lastStrokeOf, toBoardPoint } from '../services/whiteboard';
 import { IconButton, ToolHeader } from './ui';
@@ -13,10 +13,19 @@ const WIDTHS = [0.003, 0.006, 0.012];
 const ERASER_RADIUS = 0.012;
 const EXPORT_WIDTH_PX = 1600;
 
+/** The line that the user draws now. It is saved when the pointer goes up. */
+interface ActiveLine {
+  /** Only this pointer draws. A second finger or a palm is ignored. */
+  pointerId: number;
+  points: number[];
+  color: string;
+  width: number;
+}
+
 export default function TacticalWhiteboard() {
   const t = useT();
   const { doc, memberId } = useSync();
-  const { records: strokes, map } = useRecords('strokes', isWhiteboardStroke);
+  const { records: strokes, map } = useRecords('strokes', isWhiteboardStroke, keyOfId);
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(WIDTHS[0]);
   const [isEraser, setIsEraser] = useState(false);
@@ -24,8 +33,7 @@ export default function TacticalWhiteboard() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  /** The stroke that the user draws now. It is saved when the pointer goes up. */
-  const currentRef = useRef<number[] | null>(null);
+  const activeRef = useRef<ActiveLine | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -43,8 +51,11 @@ export default function TacticalWhiteboard() {
     canvas.width = boardWidth * ratio;
     canvas.height = boardWidth * BOARD_ASPECT * ratio;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    drawBoard(ctx, strokes, boardWidth);
-  }, [strokes, boardWidth]);
+    // A redraw must keep the line in progress: a line from a peer or a resize can come at any time.
+    const active = activeRef.current;
+    const inProgress = active && active.points.length > 0 ? [{ ...active, id: '', by: memberId, timestamp: Infinity }] : [];
+    drawBoard(ctx, [...strokes, ...inProgress], boardWidth);
+  }, [strokes, boardWidth, memberId]);
 
   useEffect(redraw, [redraw]);
 
@@ -57,41 +68,45 @@ export default function TacticalWhiteboard() {
   };
 
   const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (activeRef.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const [x, y] = pointOf(event);
     if (isEraser) erase(x, y);
-    currentRef.current = [x, y];
+    // The eraser keeps no points, so it saves no line.
+    activeRef.current = { pointerId: event.pointerId, points: isEraser ? [] : [x, y], color, width };
   };
 
   const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    const current = currentRef.current;
-    if (!current) return;
+    const active = activeRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
     const [x, y] = pointOf(event);
     if (isEraser) {
       erase(x, y);
       return;
     }
-    if (!isFarEnough(current, x, y)) return;
+    const { points } = active;
+    if (!isFarEnough(points, x, y)) return;
     // Draw the new segment immediately. The full redraw comes after the save.
     const ctx = canvasRef.current?.getContext('2d');
     if (ctx) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(1, width * boardWidth);
+      ctx.strokeStyle = active.color;
+      ctx.lineWidth = Math.max(1, active.width * boardWidth);
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(current[current.length - 2] * boardWidth, current[current.length - 1] * boardWidth);
+      ctx.moveTo(points[points.length - 2] * boardWidth, points[points.length - 1] * boardWidth);
       ctx.lineTo(x * boardWidth, y * boardWidth);
       ctx.stroke();
     }
-    current.push(x, y);
+    points.push(x, y);
   };
 
-  const onPointerUp = () => {
-    const points = currentRef.current;
-    currentRef.current = null;
-    if (!points || isEraser) return;
+  const onPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
+    const active = activeRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    activeRef.current = null;
+    if (active.points.length === 0) return;
     const id = crypto.randomUUID();
-    map.set(id, { id, by: memberId, timestamp: Date.now(), points, color, width });
+    map.set(id, { id, by: memberId, timestamp: Date.now(), points: active.points, color: active.color, width: active.width });
   };
 
   const undo = () => {

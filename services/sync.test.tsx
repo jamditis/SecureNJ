@@ -2,18 +2,20 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isProposal } from './schema';
+import { ALERT_RETENTION } from './retention';
+import { isProposal, keyOfId } from './schema';
 import { SyncProvider, useRecords, useSharedSetting, useSync } from './sync';
 
 afterEach(cleanup);
 
 function Probe() {
-  const { space, memberId } = useSync();
-  const { records, map } = useRecords('proposals', isProposal);
-  const [hours, setHours] = useSharedSetting('alertRetentionHours', 4);
+  const { space, memberId, spaceFailed } = useSync();
+  const { records, map } = useRecords('proposals', isProposal, keyOfId);
+  const [hours, setHours] = useSharedSetting(ALERT_RETENTION);
   return (
     <div>
       <p>mode: {space ? 'space' : 'local'}</p>
+      <p>space failed: {String(spaceFailed)}</p>
       <p>member: {memberId}</p>
       <p>records: {records.map((record) => record.text).join(', ')}</p>
       <p>hours: {hours}</p>
@@ -52,5 +54,23 @@ describe('SyncProvider with no space', () => {
     await screen.findByText('records: Saved proposal');
     expect(screen.getByText('hours: 12')).toBeTruthy();
     expect(screen.getByText(/^member: /).textContent).toBe(member);
+  });
+});
+
+describe('SyncProvider with a saved space that cannot open', () => {
+  it('goes back to local mode and forgets the space, so that the next start works', async () => {
+    // The browser refuses this address when the provider opens the connection.
+    sessionStorage.setItem(
+      'snj.space',
+      JSON.stringify({ name: 'Broken', passphrase: 'a passphrase that is long', signaling: ['not an address'] }),
+    );
+    render(
+      <SyncProvider>
+        <Probe />
+      </SyncProvider>,
+    );
+    await screen.findByText('mode: local', undefined, { timeout: 10_000 });
+    expect(screen.getByText('space failed: true')).toBeTruthy();
+    expect(sessionStorage.getItem('snj.space')).toBeNull();
   });
 });

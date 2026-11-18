@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { DEFAULT_SIGNALING_URLS, ICE_SERVER_URLS } from '../services/config';
 import { useT } from '../services/i18n';
+import { isWeakPassphrase } from '../services/passphrase';
 import { parseSignalingUrls } from '../services/space';
 import { useSync } from '../services/sync';
 import { Button, Field, Modal, Notice, PassphraseInput, inputClass } from './ui';
@@ -43,7 +44,9 @@ export default function SpaceDialog({ onClose }: { onClose: () => void }) {
           variant="danger"
           className="w-full"
           onClick={() => {
-            void leave(deleteCopy).then(onClose);
+            void leave(deleteCopy).then((deleted) => {
+              if (!deleted) window.alert(t('space.deletePending'));
+            });
           }}
         >
           {t('space.leave')}
@@ -52,8 +55,9 @@ export default function SpaceDialog({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const parsed = parseSignalingUrls(servers);
-  const canJoin = name.trim() !== '' && passphrase.trim() !== '' && parsed.invalid.length === 0;
+  const parsed = parseSignalingUrls(servers, window.location.protocol === 'https:');
+  // The signaling server can test guesses of a weak passphrase, so a weak one is not accepted.
+  const canJoin = name.trim() !== '' && !isWeakPassphrase(passphrase) && parsed.invalid.length === 0;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

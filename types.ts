@@ -38,7 +38,16 @@ export interface MutualAidPost {
   contact: string;
   timestamp: number;
   urgent: boolean;
-  status: AidStatus;
+}
+
+/**
+ * The claim state of a post, stored with the post ID as the key. It is a
+ * separate record so that an edit of the post and a claim by a different
+ * member do not overwrite each other. No record means "open".
+ */
+export interface AidClaim {
+  postId: string;
+  status: Exclude<AidStatus, 'open'>;
   /** The display name of the member who claimed the post. */
   claimedBy: string;
 }

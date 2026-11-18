@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import en from '../locales/en';
 import { makeTranslate } from './i18n';
-import { getMemberId, loadMemberName, saveMemberName } from './identity';
+import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 
 describe('makeTranslate', () => {
   const t = makeTranslate(en);
@@ -45,12 +45,27 @@ describe('member identity', () => {
     };
   };
 
-  it('makes one ID for a browser and keeps it', () => {
+  it('makes one ID for a space and keeps it', () => {
     const storage = makeStorage();
-    const id = getMemberId(storage);
+    const id = getMemberId(storage, 'space-a');
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(getMemberId(storage)).toBe(id);
-    expect(getMemberId(makeStorage())).not.toBe(id);
+    expect(getMemberId(storage, 'space-a')).toBe(id);
+  });
+
+  it('gives one device a different ID in each space, so that the spaces have no link', () => {
+    const storage = makeStorage();
+    expect(getMemberId(storage, 'space-a')).not.toBe(getMemberId(storage, 'space-b'));
+  });
+
+  it('removes the ID and the name when the member leaves and deletes a space', () => {
+    const storage = makeStorage();
+    const id = getMemberId(storage, 'space-a');
+    const other = getMemberId(storage, 'space-b');
+    saveMemberName(storage, 'Sparrow');
+    forgetMember(storage, 'space-a');
+    expect(loadMemberName(storage)).toBe('');
+    expect(getMemberId(storage, 'space-a')).not.toBe(id);
+    expect(getMemberId(storage, 'space-b')).toBe(other);
   });
 
   it('saves the display name with no spaces at the ends', () => {

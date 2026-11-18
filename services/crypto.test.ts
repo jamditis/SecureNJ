@@ -81,6 +81,14 @@ describe('text encryption', () => {
     expect(await decryptText(wrapped, PASSPHRASE)).toBe('secret');
   });
 
+  it('accepts the same passphrase in a different Unicode form or with a space at the end', async () => {
+    // Phones and computers can encode "é" in two ways, and a paste can add a space.
+    const composed = 'caf\u00e9 au lait matin';
+    const decomposed = 'cafe\u0301 au lait matin ';
+    const sealed = await encryptText('secret', composed);
+    expect(await decryptText(sealed, decomposed)).toBe('secret');
+  });
+
   it('reads a version 1 payload', async () => {
     const legacy = await encryptLegacy('old message', PASSPHRASE);
     expect(await decryptText(legacy, PASSPHRASE)).toBe('old message');
@@ -103,6 +111,16 @@ describe('file encryption', () => {
   it('removes a path from the decrypted file name', async () => {
     const sealed = await encryptFile({ name: '../../etc/passwd', type: '', bytes: new Uint8Array(1) }, PASSPHRASE);
     expect((await decryptFile(sealed, PASSPHRASE)).name).toBe('passwd');
+  });
+
+  it('removes invisible direction marks, which can disguise a file extension', async () => {
+    const sealed = await encryptFile({ name: 'photo\u202egnp.exe', type: '', bytes: new Uint8Array(1) }, PASSPHRASE);
+    expect((await decryptFile(sealed, PASSPHRASE)).name).toBe('photognp.exe');
+  });
+
+  it('accepts the file passphrase with a space at the end', async () => {
+    const sealed = await encryptFile({ name: 'a', type: '', bytes: new Uint8Array([7]) }, PASSPHRASE);
+    expect((await decryptFile(sealed, `${PASSPHRASE} `)).bytes).toEqual(new Uint8Array([7]));
   });
 
   it('rejects the wrong passphrase and data that is not a container', async () => {

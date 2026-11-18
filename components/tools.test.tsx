@@ -2,17 +2,17 @@
 import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as Y from 'yjs';
 import type { MutualAidPost, Sighting } from '../types';
 import ConsensusBuilder from './ConsensusBuilder';
 import MutualAid from './MutualAid';
 import PhoneTree from './PhoneTree';
 import Sightings from './Sightings';
+import SpaceDialog from './SpaceDialog';
 import StatusBoard from './StatusBoard';
 import { createTestSync, renderWithSync } from './test-utils';
 
 afterEach(cleanup);
-
-const HOUR = 60 * 60 * 1000;
 
 const sighting = (patch: Partial<Sighting> = {}): Sighting => ({
   id: 's1',
@@ -77,20 +77,12 @@ describe('safety alerts', () => {
     expect(Array.from(sync.doc.getMap('confirmations').keys())).toEqual(['s2:a']);
   });
 
-  it('uses the retention time of the space, not a setting of one device', () => {
-    // The space default is 4 hours. A report that is 2 hours old stays.
-    const kept = createTestSync();
-    kept.doc.getMap('sightings').set('s1', sighting({ timestamp: Date.now() - 2 * HOUR }));
-    renderWithSync(<Sightings />, kept);
-    expect(kept.doc.getMap('sightings').size).toBe(1);
-    cleanup();
-
-    // The space sets 1 hour. Each member then deletes the same report.
-    const purged = createTestSync();
-    purged.doc.getMap('settings').set('alertRetentionHours', 1);
-    purged.doc.getMap('sightings').set('s1', sighting({ timestamp: Date.now() - 2 * HOUR }));
-    renderWithSync(<Sightings />, purged);
-    expect(purged.doc.getMap('sightings').size).toBe(0);
+  it('ignores a record that is stored under a key that is not its ID', () => {
+    // Delete uses the ID as the key. A record under a different key could not be deleted.
+    const sync = createTestSync();
+    sync.doc.getMap('sightings').set('some-other-key', sighting({ id: 's1' }));
+    renderWithSync(<Sightings />, sync);
+    expect(screen.queryByRole('article')).toBeNull();
   });
 });
 
@@ -104,35 +96,58 @@ describe('mutual aid board', () => {
     contact: '555-0100',
     timestamp: Date.now(),
     urgent: false,
-    status: 'open',
-    claimedBy: '',
   };
 
-  it('keeps a claim that a different member makes during an edit', async () => {
+  it('keeps both an edit and a claim that two members make at the same time', async () => {
     const user = userEvent.setup();
-    const sync = createTestSync();
-    const map = sync.doc.getMap<MutualAidPost>('posts');
-    map.set('p1', post);
-    renderWithSync(<MutualAid />, sync);
+    // Ana and Ben start from the same board. They are not connected.
+    const ana = createTestSync();
+    ana.doc.getMap('posts').set('p1', post);
+    const ben = new Y.Doc();
+    Y.applyUpdate(ben, Y.encodeStateAsUpdate(ana.doc));
 
+    ben.getMap('claims').set('p1', { postId: 'p1', status: 'claimed', claimedBy: 'Wren' });
+
+    renderWithSync(<MutualAid />, ana);
     await user.click(screen.getByRole('button', { name: 'Edit the post' }));
-    act(() => {
-      map.set('p1', { ...post, status: 'claimed', claimedBy: 'Wren' });
-    });
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText('Title'), ' on Friday');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-    expect(map.get('p1')).toMatchObject({ title: 'Ride to the clinic on Friday', status: 'claimed', claimedBy: 'Wren' });
+    // They connect. Each device gets the changes of the other.
+    act(() => {
+      Y.applyUpdate(ana.doc, Y.encodeStateAsUpdate(ben));
+    });
+    Y.applyUpdate(ben, Y.encodeStateAsUpdate(ana.doc));
+
+    for (const doc of [ana.doc, ben]) {
+      expect(doc.getMap('posts').get('p1')).toMatchObject({ title: 'Ride to the clinic on Friday' });
+      expect(doc.getMap('claims').get('p1')).toMatchObject({ status: 'claimed', claimedBy: 'Wren' });
+    }
+    expect(screen.getByText('Claimed by Wren')).toBeTruthy();
   });
 
-  it('records the name of the member who claims a post', async () => {
+  it('records the name of the member who claims a post, and removes the claim on "open again"', async () => {
     const user = userEvent.setup();
     const sync = createTestSync();
     sync.doc.getMap('posts').set('p1', post);
     renderWithSync(<MutualAid />, sync);
     await user.click(screen.getByRole('button', { name: 'Claim' }));
     expect(screen.getByText('Claimed by Sparrow')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Open again' }));
+    expect(sync.doc.getMap('claims').size).toBe(0);
+  });
+
+  it('deletes the claim together with the post', async () => {
+    const user = userEvent.setup();
+    const sync = createTestSync();
+    sync.doc.getMap('posts').set('p1', post);
+    sync.doc.getMap('claims').set('p1', { postId: 'p1', status: 'done', claimedBy: '' });
+    renderWithSync(<MutualAid />, sync);
+    await user.click(screen.getByRole('checkbox', { name: 'Show done' }));
+    await user.click(screen.getByRole('button', { name: 'Delete the post' }));
+    expect(sync.doc.getMap('posts').size).toBe(0);
+    expect(sync.doc.getMap('claims').size).toBe(0);
   });
 
   it('hides the contact until the member asks for it', async () => {
@@ -143,6 +158,66 @@ describe('mutual aid board', () => {
     expect(screen.queryByText('555-0100')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Show the contact' }));
     expect(screen.getByText('555-0100')).toBeTruthy();
+  });
+
+  it('changes the shared retention time only on "Save", not while the member types', async () => {
+    // Each change of this time deletes posts for the full space.
+    const user = userEvent.setup();
+    const { sync } = renderWithSync(<MutualAid />);
+    const settings = sync.doc.getMap('settings');
+    await user.click(screen.getByRole('button', { name: 'Board settings' }));
+    const field = screen.getByRole('spinbutton');
+    await user.clear(field);
+    await user.type(field, '72');
+    expect(settings.size).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(settings.get('aidRetentionHours')).toBe(72);
+  });
+
+  it('hides a post that is older than the retention time', () => {
+    const sync = createTestSync();
+    sync.doc.getMap('posts').set('p1', { ...post, timestamp: Date.now() - 49 * 60 * 60 * 1000 });
+    renderWithSync(<MutualAid />, sync);
+    expect(screen.queryByText('Ride to the clinic')).toBeNull();
+  });
+});
+
+describe('dialogs', () => {
+  it('closes only the top dialog on Escape and gives the focus back to the opener', async () => {
+    const user = userEvent.setup();
+    const sync = createTestSync();
+    sync.doc.getMap('posts').set('p1', {
+      id: 'p1',
+      type: 'request',
+      category: 'food',
+      title: 'Groceries',
+      description: '',
+      contact: '',
+      timestamp: Date.now(),
+      urgent: false,
+    });
+    renderWithSync(<MutualAid />, sync);
+    const opener = screen.getByRole('button', { name: 'Board settings' });
+    await user.click(opener);
+    await user.click(screen.getByRole('button', { name: 'Export the posts' }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+
+    await user.keyboard('{Escape}');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('keeps the Tab key inside the dialog', async () => {
+    const user = userEvent.setup();
+    renderWithSync(<Sightings />);
+    await user.click(screen.getByRole('button', { name: 'Report activity' }));
+    const dialog = screen.getByRole('dialog');
+    for (let i = 0; i < 20; i += 1) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
   });
 });
 
@@ -187,6 +262,35 @@ describe('phone tree', () => {
   });
 });
 
+describe('space dialog', () => {
+  it('does not open a space with a weak passphrase', async () => {
+    // The signaling server sees the room ID and can test guesses of the passphrase.
+    const user = userEvent.setup();
+    const joined: unknown[] = [];
+    const sync = createTestSync({ join: (config) => joined.push(config) });
+    renderWithSync(<SpaceDialog onClose={() => {}} />, sync);
+    const open = screen.getByRole<HTMLButtonElement>('button', { name: 'Open the space' });
+    const passphrase = document.querySelector<HTMLInputElement>('input[type=password]')!;
+
+    await user.type(screen.getByLabelText('Space name'), 'Ironbound');
+    await user.type(passphrase, 'short');
+    expect(open.disabled).toBe(true);
+
+    await user.type(passphrase, ' but now long enough');
+    expect(open.disabled).toBe(false);
+    await user.click(open);
+    expect(joined).toEqual([{ name: 'Ironbound', passphrase: 'short but now long enough', signaling: [] }]);
+  });
+
+  it('makes a passphrase of six random words', async () => {
+    const user = userEvent.setup();
+    renderWithSync(<SpaceDialog onClose={() => {}} />);
+    await user.click(screen.getByRole('button', { name: 'Make a random passphrase' }));
+    const field = screen.getByDisplayValue(/^([a-z]+ ){5}[a-z]+$/);
+    expect(field).toBeTruthy();
+  });
+});
+
 describe('consensus builder', () => {
   it('gives each member one position and removes it on a second click', async () => {
     const user = userEvent.setup();
@@ -228,6 +332,11 @@ describe('group check-in', () => {
       expect(me.status).toBe('transit');
       expect(me.checkInBy - before).toBeGreaterThanOrEqual(15 * 60_000);
       expect(screen.queryByText('Check-in is overdue')).toBeNull();
+
+      // An edit of the status keeps the check-in time unless the member changes it.
+      await user.click(screen.getByRole('button', { name: 'Change my status' }));
+      await user.click(screen.getByRole('button', { name: 'Safe' }));
+      expect((sync.doc.getMap('users').get('me') as { checkInBy: number }).checkInBy).toBe(me.checkInBy);
 
       act(() => {
         vi.advanceTimersByTime(16 * 60_000);

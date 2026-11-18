@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, Clock, LogOut, Navigation, Pencil, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import { useLocale, useT } from '../services/i18n';
-import { isStatusUser } from '../services/schema';
-import { isOverdue, makeStatusUpdate, sortForBoard } from '../services/status';
+import { isStatusUser, keyOfId } from '../services/schema';
+import { KEEP_CHECK_IN, isOverdue, makeStatusUpdate, sortForBoard } from '../services/status';
 import { useOnlineMembers, useRecords, useSync } from '../services/sync';
 import { timeAgo, useNow } from '../services/time';
 import type { MemberStatus, StatusUser } from '../types';
@@ -18,24 +18,27 @@ const STATUS_STYLE: Record<MemberStatus, { color: string; icon: LucideIcon }> = 
   detained: { color: 'bg-red-600', icon: ShieldAlert },
 };
 
+const clock = (time: number, locale: string) => new Date(time).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+
 export default function StatusBoard() {
   const t = useT();
   const locale = useLocale();
   const now = useNow(15_000);
   const { memberId, memberName, setMemberName } = useSync();
-  const { records: users, map } = useRecords('users', isStatusUser);
+  const { records: users, map } = useRecords('users', isStatusUser, keyOfId);
   const online = useOnlineMembers();
   const me = users.find((user) => user.id === memberId);
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(memberName);
   const [note, setNote] = useState(me?.note ?? '');
-  const [checkInMinutes, setCheckInMinutes] = useState(0);
+  // An edit of the note must not cancel a check-in time that is set.
+  const [checkInMinutes, setCheckInMinutes] = useState(me?.checkInBy ? KEEP_CHECK_IN : 0);
 
   const others = useMemo(() => sortForBoard(users.filter((user) => user.id !== memberId), now), [users, memberId, now]);
 
   const update = (status: MemberStatus) => {
     setMemberName(name);
-    map.set(memberId, makeStatusUpdate({ id: memberId, name, status, note, checkInMinutes }));
+    map.set(memberId, makeStatusUpdate({ id: memberId, name, status, note, checkInMinutes, current: me }));
     setIsEditing(false);
   };
 
@@ -57,6 +60,7 @@ export default function StatusBoard() {
             </Field>
             <Field label={t('status.checkIn')}>
               <select value={checkInMinutes} onChange={(e) => setCheckInMinutes(Number(e.target.value))} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`}>
+                {me && me.checkInBy !== null && <option value={KEEP_CHECK_IN}>{t('status.checkInKeep', { time: clock(me.checkInBy, locale) })}</option>}
                 {CHECK_IN_MINUTES.map((minutes) => (
                   <option key={minutes} value={minutes}>
                     {minutes === 0 ? t('status.checkInNone') : t('status.checkInOption', { minutes })}
@@ -82,7 +86,12 @@ export default function StatusBoard() {
           <div className="flex items-center justify-between gap-4">
             <MemberSummary user={me} name={displayName(me)} now={now} locale={locale} dark />
             <div className="flex gap-1">
-              <IconButton icon={Pencil} label={t('status.change')} className="hover:!bg-slate-800 hover:!text-white" onClick={() => setIsEditing(true)} />
+              <IconButton icon={Pencil} label={t('status.change')} className="hover:!bg-slate-800 hover:!text-white" onClick={() => {
+                  setCheckInMinutes(me.checkInBy !== null ? KEEP_CHECK_IN : 0);
+                  setNote(me.note);
+                  setIsEditing(true);
+                }}
+              />
               <IconButton icon={LogOut} label={t('status.leave')} className="hover:!bg-slate-800 hover:!text-white" onClick={() => map.delete(memberId)} />
             </div>
           </div>
@@ -138,7 +147,7 @@ function MemberSummary({ user, name, now, locale, dark = false }: MemberSummaryP
         )}
         {!overdue && user.checkInBy !== null && (
           <p className="text-xs text-slate-400">
-            {t('status.nextCheckIn', { time: new Date(user.checkInBy).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }) })}
+            {t('status.nextCheckIn', { time: clock(user.checkInBy, locale) })}
           </p>
         )}
       </div>

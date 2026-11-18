@@ -8,7 +8,7 @@
 | `npm run lint` | ESLint, with the React hooks rules |
 | `npm test` | Unit and component tests (Vitest) |
 | `npm run build` | Production build |
-| `npm run e2e` | End-to-end test in Chromium. Run the build first. |
+| `npm run e2e` | End-to-end test in Chromium. It makes its own build with no STUN server. |
 | `npm run check` | All of the above, in sequence |
 
 CI runs the same steps on each pull request (`.github/workflows/ci.yml`).
@@ -19,7 +19,7 @@ CI runs the same steps on each pull request (`.github/workflows/ci.yml`).
 | --- | --- | --- |
 | Logic | `services/<name>.test.ts`, next to the code | Node |
 | Tools | `components/tools.test.tsx` | jsdom, with documents in memory (`components/test-utils.tsx`) |
-| Full app | `e2e/smoke.mjs` | Chromium, the production build, a local signaling server |
+| Full app | `e2e/smoke.mjs` | Chromium, a production build, a local signaling server |
 
 ## Rules
 
@@ -38,7 +38,11 @@ CI runs the same steps on each pull request (`.github/workflows/ci.yml`).
 4. A confirmation from one member reaches the other member.
 5. A wrong passphrase gives a different, empty space.
 6. The exported event page opens from disk with no network and decrypts.
-7. The page makes no request to a different host and reports no error. This includes a violation of the content security policy.
+7. "Leave and delete" closes the connection to the signaling server and removes the space database, the member ID, and the passphrase from the device.
+8. The page makes no HTTP request and opens no WebSocket to a different host, and reports no error. This includes a violation of the content security policy.
+9. Each WebRTC connection is made with the STUN server list of the build (none in the test build).
+
+The test cannot see WebRTC traffic. Step 9 checks the configuration that the page gives to the browser.
 
 ## Review checklist
 
@@ -49,7 +53,8 @@ Use this list before you ask for a review, and when you review.
 - [ ] No user-visible text in components. New text is in `locales/en.ts`, in sentence case.
 - [ ] A new record type has a guard in `services/schema.ts`, and the tool reads it through `useRecords`.
 - [ ] A write does not overwrite a field that a different member can change at the same time. If it can, use one record for each member and action.
-- [ ] No setting that deletes shared data is local to one device.
+- [ ] No setting that deletes shared data is local to one device, and none is written on each keystroke.
+- [ ] A record that has child records (confirmations, claims, positions) deletes them too, and `purgeExpired` knows the pair.
 - [ ] No new request to a different host. No new dependency without a reason in the pull request.
 - [ ] Each security claim in the UI and the docs is true. `docs/security.md` is updated if a limit changed.
 - [ ] Controls have an accessible name. A new dialog closes with Escape.

@@ -3,21 +3,20 @@ import { AlertTriangle, Check, Download, Megaphone, Pencil, Phone, Plus, Search,
 import { decryptText, encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { useLocale, useT } from '../services/i18n';
-import { usePurgeExpired } from '../services/retention';
-import { isMutualAidPost } from '../services/schema';
+import { cleanImportedPosts, statusOf } from '../services/aid';
+import { AID_RETENTION, expiredIds } from '../services/retention';
+import { isAidClaim, isMutualAidPost, keyOfClaim, keyOfId } from '../services/schema';
 import { useRecords, useSharedSetting, useSync } from '../services/sync';
 import { timeAgo, useNow } from '../services/time';
-import type { MutualAidPost } from '../types';
+import type { AidStatus, MutualAidPost } from '../types';
 import { Button, EmptyState, Field, IconButton, Modal, Notice, PassphraseModal, ToolHeader, inputClass } from './ui';
 
 const CATEGORIES = ['food', 'shelter', 'transport', 'childcare', 'medical', 'legal', 'supplies', 'labor', 'other'] as const;
 type Category = (typeof CATEGORIES)[number];
 const isCategory = (value: string): value is Category => (CATEGORIES as readonly string[]).includes(value);
 
-const DEFAULT_RETENTION_HOURS = 48;
 type Draft = Pick<MutualAidPost, 'type' | 'category' | 'title' | 'description' | 'contact' | 'urgent'>;
 const EMPTY_DRAFT: Draft = { type: 'request', category: 'food', title: '', description: '', contact: '', urgent: false };
-// The draft must not hold the status. A different member can claim the post during the edit.
 const toDraft = ({ type, category, title, description, contact, urgent }: MutualAidPost): Draft => ({
   type,
   category,
@@ -31,8 +30,13 @@ export default function MutualAid() {
   const t = useT();
   const now = useNow();
   const { doc, memberName } = useSync();
-  const { records: posts, map } = useRecords('posts', isMutualAidPost);
-  const [retention, setRetention] = useSharedSetting('aidRetentionHours', DEFAULT_RETENTION_HOURS);
+  const { records: posts, map } = useRecords('posts', isMutualAidPost, keyOfId);
+  // The claim state is a separate record. An edit of a post and a claim by a
+  // different member then merge, and neither is lost.
+  const { records: claims, map: claimMap } = useRecords('claims', isAidClaim, keyOfClaim);
+  const [retention, setRetention] = useSharedSetting(AID_RETENTION);
+  // The shared time changes only on "Save". A change deletes posts for all members.
+  const [retentionDraft, setRetentionDraft] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'request' | 'offer'>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showDone, setShowDone] = useState(false);
@@ -43,38 +47,48 @@ export default function MutualAid() {
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const remove = useCallback((ids: string[]) => doc.transact(() => ids.forEach((id) => map.delete(id))), [doc, map]);
-  usePurgeExpired(posts, retention, remove);
+  const remove = useCallback(
+    (ids: string[]) =>
+      doc.transact(() =>
+        ids.forEach((id) => {
+          map.delete(id);
+          claimMap.delete(id);
+        }),
+      ),
+    [doc, map, claimMap],
+  );
 
   const categoryLabel = (category: string) => (isCategory(category) ? t(`aid.category.${category}`) : category);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
+    // The data layer deletes expired posts. This filter hides them until it does.
+    const expired = new Set(expiredIds(posts, now, retention));
     return posts
+      .filter((p) => !expired.has(p.id))
       .filter((p) => typeFilter === 'all' || p.type === typeFilter)
       .filter((p) => categoryFilter === 'all' || p.category === categoryFilter)
-      .filter((p) => showDone || p.status !== 'done')
+      .filter((p) => showDone || statusOf(p.id, claims) !== 'done')
       .filter((p) => term === '' || `${p.title} ${p.description}`.toLowerCase().includes(term))
       .sort((a, b) => Number(b.urgent) - Number(a.urgent) || b.timestamp - a.timestamp);
-  }, [posts, typeFilter, categoryFilter, showDone, search]);
+  }, [posts, claims, typeFilter, categoryFilter, showDone, search, now, retention]);
 
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!editing || editing.draft.title.trim() === '') return;
     const current = editing.id ? map.get(editing.id) : undefined;
     const id = current?.id ?? crypto.randomUUID();
-    map.set(id, {
-      id,
-      timestamp: current?.timestamp ?? Date.now(),
-      status: current?.status ?? 'open',
-      claimedBy: current?.claimedBy ?? '',
-      ...editing.draft,
-    });
+    map.set(id, { id, timestamp: current?.timestamp ?? Date.now(), ...editing.draft });
     setEditing(null);
   };
 
-  const setStatus = (post: MutualAidPost, status: MutualAidPost['status']) => {
-    map.set(post.id, { ...post, status, claimedBy: status === 'claimed' ? memberName : status === 'open' ? '' : post.claimedBy });
+  const setStatus = (post: MutualAidPost, status: AidStatus) => {
+    if (status === 'open') {
+      claimMap.delete(post.id);
+      return;
+    }
+    const claimedBy = status === 'claimed' ? memberName : (claimMap.get(post.id)?.claimedBy ?? '');
+    claimMap.set(post.id, { postId: post.id, status, claimedBy });
   };
 
   const exportPosts = async (passphrase: string) => {
@@ -84,7 +98,7 @@ export default function MutualAid() {
 
   const importPosts = async (payload: string, passphrase: string) => {
     const parsed: unknown = JSON.parse(await decryptText(payload, passphrase));
-    const incoming = (Array.isArray(parsed) ? parsed : []).filter(isMutualAidPost).filter((post) => !map.has(post.id));
+    const incoming = cleanImportedPosts(parsed, Date.now(), retention).filter((post) => !map.has(post.id));
     doc.transact(() => incoming.forEach((post) => map.set(post.id, post)));
     setMessage(t('aid.imported', { count: incoming.length }));
   };
@@ -161,6 +175,8 @@ export default function MutualAid() {
             <PostCard
               key={post.id}
               post={post}
+              status={statusOf(post.id, claims)}
+              claimedBy={claims.find((claim) => claim.postId === post.id)?.claimedBy ?? ''}
               now={now}
               categoryLabel={categoryLabel(post.category)}
               onStatus={(status) => setStatus(post, status)}
@@ -172,17 +188,37 @@ export default function MutualAid() {
       </div>
 
       {showSettings && (
-        <Modal title={t('aid.settings')} onClose={() => setShowSettings(false)}>
-          <Field label={t('aid.retention')}>
-            <input
-              type="number"
-              min={0}
-              value={retention}
-              onChange={(event) => setRetention(Math.max(0, Number(event.target.value) || 0))}
-              className={inputClass}
-            />
-          </Field>
-          <Notice>{t('aid.retentionNote')}</Notice>
+        <Modal
+          title={t('aid.settings')}
+          onClose={() => {
+            setShowSettings(false);
+            setRetentionDraft(null);
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setRetention(Math.max(0, Math.floor(Number(retentionDraft) || 0)));
+              setRetentionDraft(null);
+            }}
+            className="flex items-end gap-2"
+          >
+            <div className="flex-1">
+              <Field label={t('aid.retention')}>
+                <input
+                  type="number"
+                  min={0}
+                  value={retentionDraft ?? String(retention)}
+                  onChange={(event) => setRetentionDraft(event.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+            <Button type="submit" variant="dark" disabled={retentionDraft === null || retentionDraft === String(retention)}>
+              {t('common.save')}
+            </Button>
+          </form>
+          <Notice tone="warning">{t('aid.retentionNote')}</Notice>
           <div className="flex gap-2">
             <Button variant="light" className="flex-1" disabled={posts.length === 0} onClick={() => setTransfer({ kind: 'export' })}>
               <Download className="w-4 h-4" aria-hidden="true" /> {t('aid.export')}
@@ -275,21 +311,23 @@ export default function MutualAid() {
 
 interface PostCardProps {
   post: MutualAidPost;
+  status: AidStatus;
+  claimedBy: string;
   now: number;
   categoryLabel: string;
-  onStatus: (status: MutualAidPost['status']) => void;
+  onStatus: (status: AidStatus) => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function PostCard({ post, now, categoryLabel, onStatus, onEdit, onDelete }: PostCardProps) {
+function PostCard({ post, status, claimedBy, now, categoryLabel, onStatus, onEdit, onDelete }: PostCardProps) {
   const t = useT();
   const locale = useLocale();
   const [showContact, setShowContact] = useState(false);
   const isRequest = post.type === 'request';
 
   return (
-    <article className={`bg-white p-6 rounded-3xl border flex flex-col gap-3 ${post.urgent && post.status === 'open' ? 'border-red-300' : 'border-slate-200'} ${post.status === 'done' ? 'opacity-60' : ''}`}>
+    <article className={`bg-white p-6 rounded-3xl border flex flex-col gap-3 ${post.urgent && status === 'open' ? 'border-red-300' : 'border-slate-200'} ${status === 'done' ? 'opacity-60' : ''}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${isRequest ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
           {t(`aid.type.${post.type}`)}
@@ -302,9 +340,7 @@ function PostCard({ post, now, categoryLabel, onStatus, onEdit, onDelete }: Post
         <span className="inline-block text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{categoryLabel}</span>
         <p className="text-slate-600 text-sm break-words whitespace-pre-wrap">{post.description}</p>
         <p className="text-xs font-bold text-slate-500">
-          {post.status === 'claimed' && post.claimedBy
-            ? t('aid.status.claimedBy', { name: post.claimedBy })
-            : t(`aid.status.${post.status}`)}
+          {status === 'claimed' && claimedBy ? t('aid.status.claimedBy', { name: claimedBy }) : t(`aid.status.${status}`)}
         </p>
       </div>
       {post.contact &&
@@ -316,17 +352,17 @@ function PostCard({ post, now, categoryLabel, onStatus, onEdit, onDelete }: Post
           </Button>
         ))}
       <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
-        {post.status === 'open' && (
+        {status === 'open' && (
           <Button variant="light" className="!px-3 !py-1.5 !text-xs" onClick={() => onStatus('claimed')}>
             {t('aid.claim')}
           </Button>
         )}
-        {post.status !== 'done' && (
+        {status !== 'done' && (
           <Button variant="light" className="!px-3 !py-1.5 !text-xs" onClick={() => onStatus('done')}>
             <Check className="w-4 h-4" aria-hidden="true" /> {t('aid.markDone')}
           </Button>
         )}
-        {post.status !== 'open' && (
+        {status !== 'open' && (
           <Button variant="ghost" className="!px-3 !py-1.5 !text-xs" onClick={() => onStatus('open')}>
             {t('aid.reopen')}
           </Button>

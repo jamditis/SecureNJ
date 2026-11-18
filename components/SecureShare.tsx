@@ -7,6 +7,7 @@ import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from '
 
 type Mode = 'encrypt' | 'decrypt';
 type Kind = 'text' | 'file';
+const ENCRYPTED_FILE_NAME = 'encrypted-file.snj';
 
 function Tabs<T extends string>({ options, value, onChange, label }: { options: readonly T[]; value: T; onChange: (v: T) => void; label: (v: T) => string }) {
   return (
@@ -58,11 +59,13 @@ export default function SecureShare() {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (mode === 'encrypt') {
       const sealed = await encryptFile({ name: file.name, type: file.type, bytes }, passphrase);
-      downloadBlob(new Blob([sealed], { type: 'application/octet-stream' }), `${file.name}.snj`);
-      setMessage({ tone: 'info', text: t('share.fileSaved', { name: `${file.name}.snj` }) });
+      // The name of the encrypted file must not show the name of the original.
+      downloadBlob(new Blob([sealed], { type: 'application/octet-stream' }), ENCRYPTED_FILE_NAME);
+      setMessage({ tone: 'info', text: t('share.fileSaved', { name: ENCRYPTED_FILE_NAME }) });
     } else {
       const plain = await decryptFile(bytes, passphrase);
-      downloadBlob(new Blob([plain.bytes], { type: plain.type }), plain.name);
+      // A generic type makes the browser save the file. It never opens it inside the app.
+      downloadBlob(new Blob([plain.bytes], { type: 'application/octet-stream' }), plain.name);
       setMessage({ tone: 'info', text: t('share.fileSaved', { name: plain.name }) });
     }
   };
@@ -101,6 +104,7 @@ export default function SecureShare() {
           ) : (
             <Field label={mode === 'encrypt' ? t('share.fileToEncrypt') : t('share.fileToDecrypt')}>
               <input
+                key={mode}
                 type="file"
                 accept={mode === 'decrypt' ? '.snj' : undefined}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -108,6 +112,8 @@ export default function SecureShare() {
               />
             </Field>
           )}
+
+          {kind === 'file' && mode === 'encrypt' && <Notice>{t('share.fileNote')}</Notice>}
 
           <Field label={t('passphrase.label')}>
             <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate={mode === 'encrypt'} />

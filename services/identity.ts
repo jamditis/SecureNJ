@@ -1,17 +1,25 @@
 /**
- * Each browser has a random member ID. It identifies a device inside a
- * space (votes, check-ins). It is not an account and has no link to a person.
+ * Each browser has a random member ID for each space. It tells devices
+ * apart inside a space (positions, check-ins). It is not an account, and
+ * the IDs of one device in two spaces have no link.
  */
-const ID_KEY = 'snj.memberId';
+const idKey = (scope: string) => `snj.member.${scope}`;
 const NAME_KEY = 'snj.memberName';
 
-export function getMemberId(storage: Storage): string {
-  let id = storage.getItem(ID_KEY);
+/** `scope` is the database name of the space, or of the local document. */
+export function getMemberId(storage: Storage, scope: string): string {
+  let id = storage.getItem(idKey(scope));
   if (!id) {
     id = globalThis.crypto.randomUUID();
-    storage.setItem(ID_KEY, id);
+    storage.setItem(idKey(scope), id);
   }
   return id;
+}
+
+/** Removes what links this device to its records in a space. */
+export function forgetMember(storage: Storage, scope: string): void {
+  storage.removeItem(idKey(scope));
+  storage.removeItem(NAME_KEY);
 }
 
 export function loadMemberName(storage: Storage): string {

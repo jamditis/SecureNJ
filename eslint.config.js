@@ -16,6 +16,6 @@ export default tseslint.config(
   },
   {
     files: ['e2e/**/*.mjs', 'eslint.config.js'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', URL: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', URL: 'readonly', window: 'readonly', indexedDB: 'readonly', localStorage: 'readonly', sessionStorage: 'readonly' } },
   },
 );

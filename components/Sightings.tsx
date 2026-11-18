@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Clock, Eye, MapPin, Settings, ShieldAlert, ShieldCheck, Siren, Trash2 } from 'lucide-react';
 import { alertState, confirmationKey, countConfirmations } from '../services/alerts';
 import { useLocale, useT } from '../services/i18n';
-import { usePurgeExpired } from '../services/retention';
-import { isConfirmation, isSighting } from '../services/schema';
+import { ALERT_RETENTION, expiredIds } from '../services/retention';
+import { isConfirmation, isSighting, keyOfConfirmation, keyOfId } from '../services/schema';
 import { useRecords, useSharedSetting, useSync } from '../services/sync';
 import { timeAgo, useNow } from '../services/time';
 import type { Sighting, SightingType } from '../types';
@@ -11,7 +11,6 @@ import { Button, EmptyState, Field, IconButton, Modal, Notice, ToolHeader, input
 
 const TYPES: SightingType[] = ['raid', 'checkpoint', 'surveillance', 'other'];
 const RETENTION_HOURS = [1, 4, 12, 24];
-const DEFAULT_RETENTION_HOURS = 4;
 
 const TYPE_STYLE: Record<SightingType, string> = {
   raid: 'bg-red-100 text-red-800 border-red-200',
@@ -27,9 +26,9 @@ export default function Sightings() {
   const locale = useLocale();
   const now = useNow();
   const { doc, memberId, space } = useSync();
-  const { records: sightings, map } = useRecords('sightings', isSighting);
-  const { records: confirmations, map: confirmationMap } = useRecords('confirmations', isConfirmation);
-  const [retention, setRetention] = useSharedSetting('alertRetentionHours', DEFAULT_RETENTION_HOURS);
+  const { records: sightings, map } = useRecords('sightings', isSighting, keyOfId);
+  const { records: confirmations, map: confirmationMap } = useRecords('confirmations', isConfirmation, keyOfConfirmation);
+  const [retention, setRetention] = useSharedSetting(ALERT_RETENTION);
   const [isReporting, setIsReporting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [report, setReport] = useState(EMPTY_REPORT);
@@ -46,9 +45,11 @@ export default function Sightings() {
     },
     [doc, map, confirmationMap],
   );
-  usePurgeExpired(sightings, retention, remove);
-
-  const sorted = useMemo(() => [...sightings].sort((a, b) => b.timestamp - a.timestamp), [sightings]);
+  // The data layer deletes expired reports. This filter hides them until it does.
+  const sorted = useMemo(() => {
+    const expired = new Set(expiredIds(sightings, now, retention));
+    return sightings.filter((s) => !expired.has(s.id)).sort((a, b) => b.timestamp - a.timestamp);
+  }, [sightings, now, retention]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

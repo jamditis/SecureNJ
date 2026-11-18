@@ -58,6 +58,14 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Two devices can encode the same typed passphrase in different ways, and a
+ * paste can add a space. Version 2 uses this form for all passphrases.
+ */
+export function normalizePassphrase(passphrase: string): string {
+  return passphrase.normalize('NFKC').trim();
+}
+
 async function deriveKey(passphrase: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const subtle = globalThis.crypto.subtle;
   const material = await subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
@@ -74,7 +82,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
 export async function encryptBytes(data: Uint8Array, passphrase: string): Promise<Uint8Array> {
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const key = await deriveKey(passphrase, salt, KDF_ITERATIONS);
+  const key = await deriveKey(normalizePassphrase(passphrase), salt, KDF_ITERATIONS);
   const ciphertext = new Uint8Array(await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data));
 
   const sealed = new Uint8Array(SALT_BYTES + IV_BYTES + ciphertext.length);
@@ -84,11 +92,11 @@ export async function encryptBytes(data: Uint8Array, passphrase: string): Promis
   return sealed;
 }
 
-export async function decryptBytes(
-  sealed: Uint8Array,
-  passphrase: string,
-  iterations: number = KDF_ITERATIONS,
-): Promise<Uint8Array> {
+export function decryptBytes(sealed: Uint8Array, passphrase: string): Promise<Uint8Array> {
+  return open(sealed, normalizePassphrase(passphrase), KDF_ITERATIONS);
+}
+
+async function open(sealed: Uint8Array, passphrase: string, iterations: number): Promise<Uint8Array> {
   // 16 bytes is the size of the GCM authentication tag.
   if (sealed.length < SALT_BYTES + IV_BYTES + 16) {
     throw new DecryptionError();
@@ -117,7 +125,8 @@ export async function decryptText(payload: string, passphrase: string): Promise<
   } catch {
     throw new DecryptionError();
   }
-  const plain = await decryptBytes(sealed, passphrase, isCurrent ? KDF_ITERATIONS : LEGACY_KDF_ITERATIONS);
+  // Version 1 used the passphrase as typed.
+  const plain = isCurrent ? await decryptBytes(sealed, passphrase) : await open(sealed, passphrase, LEGACY_KDF_ITERATIONS);
   try {
     return decoder.decode(plain);
   } catch {
@@ -125,14 +134,11 @@ export async function decryptText(payload: string, passphrase: string): Promise<
   }
 }
 
-/** A decrypted file name comes from the sender. It must not contain a path. */
+/** A decrypted file name comes from the sender. It must not contain a path or hidden characters. */
 function safeFileName(name: unknown): string {
   const base = String(name ?? '').split(/[\\/]/).pop() ?? '';
-  const isControl = (code: number) => code < 32 || code === 127;
-  const clean = Array.from(base)
-    .filter((char) => !isControl(char.charCodeAt(0)))
-    .join('')
-    .trim();
+  // Control and format characters include the marks that reverse text direction.
+  const clean = base.replace(/[\p{Cc}\p{Cf}]/gu, '').trim();
   return clean === '' || clean === '.' || clean === '..' ? 'decrypted-file' : clean;
 }
 

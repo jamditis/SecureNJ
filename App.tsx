@@ -10,6 +10,7 @@ import Sightings from './components/Sightings';
 import SpaceDialog from './components/SpaceDialog';
 import StatusBoard from './components/StatusBoard';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
+import { Notice } from './components/ui';
 import { useT } from './services/i18n';
 import { useSync } from './services/sync';
 import { TOOLS, type ToolInfo } from './tools';
@@ -28,7 +29,7 @@ const VIEWS: Record<ToolInfo['id'], ComponentType> = {
 
 export default function App() {
   const t = useT();
-  const { space, peers } = useSync();
+  const { space, peers, spaceFailed } = useSync();
   const [activeTool, setActiveTool] = useState<ToolId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSpaceOpen, setIsSpaceOpen] = useState(false);
@@ -99,7 +100,8 @@ export default function App() {
       </nav>
 
       <main className="flex-1 min-w-0 p-4 md:p-10 lg:p-16">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto space-y-6">
+          {spaceFailed && <Notice tone="error">{t('sync.spaceFailed')}</Notice>}
           {ActiveView ? <ActiveView /> : <Dashboard onSelectTool={setActiveTool} onOpenSpace={() => setIsSpaceOpen(true)} />}
         </div>
       </main>

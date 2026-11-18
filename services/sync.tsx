@@ -19,12 +19,13 @@ import {
   type ReactNode,
 } from 'react';
 import * as Y from 'yjs';
-import { IndexeddbPersistence } from 'y-indexeddb';
+import { IndexeddbPersistence, storeState } from 'y-indexeddb';
 import { WebrtcProvider } from 'y-webrtc';
 import { Awareness } from 'y-protocols/awareness';
 import { ICE_SERVER_URLS } from './config';
 import { useT } from './i18n';
-import { getMemberId, loadMemberName, saveMemberName } from './identity';
+import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
+import { purgeExpired } from './retention';
 import {
   clearSavedSpace,
   deriveSpaceKeys,
@@ -36,6 +37,11 @@ import {
 
 const LOCAL_DB = 'snj-local';
 const PRIVATE_DB = 'snj-private';
+const SWEEP_INTERVAL_MS = 30_000;
+const DATABASE_TIMEOUT_MS = 10_000;
+const DELETE_TIMEOUT_MS = 3_000;
+/** Tabs of one browser use this channel to leave a space together. */
+const LEAVE_CHANNEL = 'snj-leave';
 
 /** `none`: no server is set. `connecting`: no server answers. */
 export type SignalingState = 'none' | 'connecting' | 'connected';
@@ -46,6 +52,7 @@ export interface SyncValue {
   /** Data that never leaves this device. */
   privateDoc: Y.Doc;
   awareness: Awareness;
+  /** The ID of this device in the active space. A different space gives a different ID. */
   memberId: string;
   memberName: string;
   setMemberName: (name: string) => void;
@@ -53,8 +60,11 @@ export interface SyncValue {
   /** Connected peers, which includes other tabs of this browser. */
   peers: number;
   signaling: SignalingState;
+  /** True after a space did not open. The app is then in local mode. */
+  spaceFailed: boolean;
   join: (config: SpaceConfig, remember: boolean) => void;
-  leave: (deleteLocalCopy: boolean) => Promise<void>;
+  /** Resolves to false if the delete of the local copy is not complete yet. */
+  leave: (deleteLocalCopy: boolean) => Promise<boolean>;
 }
 
 export const SyncContext = createContext<SyncValue | null>(null);
@@ -64,6 +74,8 @@ export function useSync(): SyncValue {
   if (!value) throw new Error('useSync must be used inside SyncProvider');
   return value;
 }
+
+export const databaseName = (keys: SpaceKeys | null) => (keys ? keys.roomId : LOCAL_DB);
 
 interface SignalingConnection {
   connected: boolean;
@@ -90,6 +102,52 @@ function watchSignaling(network: WebrtcProvider, onChange: (state: SignalingStat
     });
 }
 
+/**
+ * Keeps the browser database small and free of deleted text. The database
+ * is a log of changes: without this, the text of a deleted record stays in
+ * the log. `purge` also deletes expired records of the space.
+ */
+function startHousekeeping(doc: Y.Doc, persistence: IndexeddbPersistence, purge: boolean) {
+  let dirty = false;
+  const markDirty = () => {
+    dirty = true;
+  };
+  doc.on('update', markDirty);
+  const compact = async () => {
+    dirty = false;
+    await storeState(persistence, true);
+  };
+  const sweep = () => {
+    if (purge) purgeExpired(doc, Date.now());
+    // A closed database rejects. The next session compacts at its start.
+    if (dirty) compact().catch(() => {});
+  };
+  const timer = setInterval(sweep, SWEEP_INTERVAL_MS);
+  void persistence.whenSynced.then(sweep);
+  return {
+    compact,
+    stop: () => {
+      clearInterval(timer);
+      doc.off('update', markDirty);
+    },
+  };
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
+function deleteDatabase(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
 interface SessionOptions {
   keys: SpaceKeys | null;
   signaling: string[];
@@ -101,45 +159,57 @@ interface SessionOptions {
 export interface Session {
   doc: Y.Doc;
   awareness: Awareness;
+  memberId: string;
+  dbName: string;
   /** Resolves when the saved data is loaded from the browser database. */
   ready: Promise<unknown>;
-  /** Deletes the browser database of this session. */
-  clearData: () => Promise<void>;
+  /** Rewrites the browser database so that it holds the current data only. */
+  compact: () => Promise<void>;
   close: () => void;
 }
 
 export function openSession({ keys, signaling, memberId, onPeers, onSignaling }: SessionOptions): Session {
+  const dbName = databaseName(keys);
   const doc = new Y.Doc();
   const awareness = new Awareness(doc);
   awareness.setLocalStateField('member', memberId);
-  const persistence = new IndexeddbPersistence(keys ? keys.roomId : LOCAL_DB, doc);
+  const persistence = new IndexeddbPersistence(dbName, doc);
+  const housekeeping = startHousekeeping(doc, persistence, true);
 
   let network: WebrtcProvider | null = null;
   let stopSignalingWatch = () => {};
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    housekeeping.stop();
+    stopSignalingWatch();
+    // destroy() alone leaves the connection to the signaling server open.
+    network?.disconnect();
+    network?.destroy();
+    void persistence.destroy();
+    awareness.destroy();
+    doc.destroy();
+  };
+
   if (keys) {
-    network = new WebrtcProvider(keys.roomId, doc, {
-      signaling,
-      password: keys.roomPassword,
-      awareness,
-      peerOpts: { config: { iceServers: ICE_SERVER_URLS.length > 0 ? [{ urls: ICE_SERVER_URLS }] : [] } },
-    });
+    try {
+      network = new WebrtcProvider(keys.roomId, doc, {
+        signaling,
+        password: keys.roomPassword,
+        awareness,
+        peerOpts: { config: { iceServers: ICE_SERVER_URLS.length > 0 ? [{ urls: ICE_SERVER_URLS }] : [] } },
+      });
+    } catch (error) {
+      // For example: the browser refuses the address of a signaling server.
+      close();
+      throw error;
+    }
     network.on('peers', ({ webrtcPeers, bcPeers }) => onPeers(webrtcPeers.length + bcPeers.length));
     stopSignalingWatch = watchSignaling(network, onSignaling);
   }
 
-  return {
-    doc,
-    awareness,
-    ready: persistence.whenSynced,
-    clearData: () => persistence.clearData(),
-    close: () => {
-      stopSignalingWatch();
-      network?.destroy();
-      void persistence.destroy();
-      awareness.destroy();
-      doc.destroy();
-    },
-  };
+  return { doc, awareness, memberId, dbName, ready: persistence.whenSynced, compact: housekeeping.compact, close };
 }
 
 export function SyncProvider({ children }: { children: ReactNode }) {
@@ -150,19 +220,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [peers, setPeers] = useState(0);
   const [signaling, setSignaling] = useState<SignalingState>('none');
   const [failed, setFailed] = useState(false);
-  const [memberId] = useState(() => getMemberId(localStorage));
+  const [spaceFailed, setSpaceFailed] = useState(false);
   const [memberName, setMemberNameState] = useState(() => loadMemberName(localStorage));
 
   useEffect(() => {
     const doc = new Y.Doc();
     const persistence = new IndexeddbPersistence(PRIVATE_DB, doc);
+    const housekeeping = startHousekeeping(doc, persistence, false);
     let cancelled = false;
-    persistence.whenSynced.then(
+    // The database never reports that it is not available, so use a time limit.
+    withTimeout(persistence.whenSynced, DATABASE_TIMEOUT_MS).then(
       () => !cancelled && setPrivateDoc(doc),
       () => !cancelled && setFailed(true),
     );
     return () => {
       cancelled = true;
+      housekeeping.stop();
       void persistence.destroy();
       doc.destroy();
     };
@@ -178,14 +251,24 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       opened = openSession({
         keys,
         signaling: config?.signaling ?? [],
-        memberId,
+        memberId: getMemberId(localStorage, databaseName(keys)),
         onPeers: setPeers,
         onSignaling: setSignaling,
       });
-      await opened.ready;
+      await withTimeout(opened.ready, DATABASE_TIMEOUT_MS);
       if (!cancelled) setSession(opened);
     };
-    open().catch(() => !cancelled && setFailed(true));
+    open().catch(() => {
+      if (cancelled) return;
+      if (config) {
+        // Do not keep a space that cannot open: the app would fail at each start.
+        clearSavedSpace(sessionStorage, localStorage);
+        setSpaceFailed(true);
+        setConfig(null);
+      } else {
+        setFailed(true);
+      }
+    });
     return () => {
       cancelled = true;
       opened?.close();
@@ -193,24 +276,51 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setPeers(0);
       setSignaling('none');
     };
-  }, [config, memberId]);
+  }, [config]);
+
+  // When one tab leaves a space, the other tabs of this browser leave it too.
+  // An open tab would keep the connection and would block the delete.
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined' || !session) return;
+    const channel = new BroadcastChannel(LEAVE_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      if (event.data === session.dbName) {
+        clearSavedSpace(sessionStorage, localStorage);
+        setConfig(null);
+      }
+    };
+    return () => channel.close();
+  }, [session]);
 
   const join = useCallback((next: SpaceConfig, remember: boolean) => {
     saveSpace(next, remember, sessionStorage, localStorage);
+    setSpaceFailed(false);
     setConfig(next);
   }, []);
 
   const leave = useCallback(
     async (deleteLocalCopy: boolean) => {
-      if (deleteLocalCopy && session) {
-        // A second tab that has the space open blocks the delete. Do not wait
-        // for it: the browser completes the delete when that tab closes.
-        await Promise.race([session.clearData(), new Promise((resolve) => setTimeout(resolve, 3000))]);
-      }
+      if (!session || !config) return true;
+      const { dbName } = session;
       clearSavedSpace(sessionStorage, localStorage);
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel(LEAVE_CHANNEL);
+        channel.postMessage(dbName);
+        channel.close();
+      }
+      session.close();
       setConfig(null);
+      if (!deleteLocalCopy) return true;
+      forgetMember(localStorage, dbName);
+      setMemberNameState('');
+      // The browser waits until all tabs close the database. Do not wait
+      // without limit: the delete completes later if a tab is slow.
+      return withTimeout(deleteDatabase(dbName), DELETE_TIMEOUT_MS).then(
+        () => true,
+        () => false,
+      );
     },
-    [session],
+    [session, config],
   );
 
   const setMemberName = useCallback((name: string) => {
@@ -225,17 +335,18 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             doc: session.doc,
             privateDoc,
             awareness: session.awareness,
-            memberId,
+            memberId: session.memberId,
             memberName,
             setMemberName,
             space: config ? { name: config.name, signaling: config.signaling } : null,
             peers,
             signaling,
+            spaceFailed,
             join,
             leave,
           }
         : null,
-    [session, privateDoc, memberId, memberName, setMemberName, config, peers, signaling, join, leave],
+    [session, privateDoc, memberName, setMemberName, config, peers, signaling, spaceFailed, join, leave],
   );
 
   if (failed) {
@@ -247,7 +358,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
-function createRecordStore<T>(map: Y.Map<T>, isValid: (value: unknown) => value is T) {
+function createRecordStore<T>(map: Y.Map<T>, isValid: (value: unknown) => value is T, keyOf: (record: T) => string) {
   let last: T[] = [];
   return {
     subscribe: (onChange: () => void) => {
@@ -257,7 +368,10 @@ function createRecordStore<T>(map: Y.Map<T>, isValid: (value: unknown) => value 
     // Yjs returns the same object for a record that did not change, so a
     // shallow comparison is sufficient to keep the snapshot stable.
     getSnapshot: () => {
-      const next = Array.from(map.values()).filter(isValid);
+      const next: T[] = [];
+      map.forEach((value: unknown, key) => {
+        if (isValid(value) && keyOf(value) === key) next.push(value);
+      });
       if (next.length !== last.length || next.some((record, i) => record !== last[i])) last = next;
       return last;
     },
@@ -265,23 +379,25 @@ function createRecordStore<T>(map: Y.Map<T>, isValid: (value: unknown) => value 
 }
 
 /**
- * The valid records of one map, as React state. A record that fails
- * `isValid` is ignored. `isValid` must be a stable function.
+ * The valid records of one map, as React state. A record is ignored if it
+ * fails `isValid` or if its map key is not `keyOf(record)`. Both functions
+ * must be stable: use the guards and key functions in `schema.ts`.
  */
 export function useRecords<T>(
   name: string,
   isValid: (value: unknown) => value is T,
+  keyOf: (record: T) => string,
   scope: 'shared' | 'private' = 'shared',
 ): { records: T[]; map: Y.Map<T> } {
   const sync = useSync();
   const map = (scope === 'private' ? sync.privateDoc : sync.doc).getMap<T>(name);
-  const store = useMemo(() => createRecordStore(map, isValid), [map, isValid]);
+  const store = useMemo(() => createRecordStore(map, isValid, keyOf), [map, isValid, keyOf]);
   const records = useSyncExternalStore(store.subscribe, store.getSnapshot);
   return { records, map };
 }
 
 /** A number that the full space shares, for example a retention time. */
-export function useSharedSetting(key: string, fallback: number): [number, (value: number) => void] {
+export function useSharedSetting({ key, fallback }: { key: string; fallback: number }): [number, (value: number) => void] {
   const { doc } = useSync();
   const map = doc.getMap<number>('settings');
   const subscribe = useCallback(

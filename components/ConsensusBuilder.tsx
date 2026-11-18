@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Archive, CheckCircle2, Hand, Lock, Plus, ThumbsUp, Trash2, Unlock, XOctagon, type LucideIcon } from 'lucide-react';
 import { tallyVotes, voteKey, type Outcome } from '../services/consensus';
 import { useT } from '../services/i18n';
-import { isProposal, isVote } from '../services/schema';
+import { isProposal, isVote, keyOfId, keyOfVote } from '../services/schema';
 import { useRecords, useSync } from '../services/sync';
 import type { Proposal, Vote, VoteType } from '../types';
 import { Button, EmptyState, IconButton, ToolHeader, inputClass } from './ui';
@@ -25,8 +25,8 @@ const OUTCOME_STYLE: Record<Outcome, string> = {
 export default function ConsensusBuilder() {
   const t = useT();
   const { doc, memberId, memberName } = useSync();
-  const { records: proposals, map: proposalMap } = useRecords('proposals', isProposal);
-  const { records: votes, map: voteMap } = useRecords('votes', isVote);
+  const { records: proposals, map: proposalMap } = useRecords('proposals', isProposal, keyOfId);
+  const { records: votes, map: voteMap } = useRecords('votes', isVote, keyOfVote);
   const [text, setText] = useState('');
 
   const sorted = useMemo(

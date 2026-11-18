@@ -4,7 +4,7 @@ import { decryptText, encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { useT, type Translate } from '../services/i18n';
 import { buildPhoneTree, parseContacts, treeDepth, type CallAssignment } from '../services/phoneTree';
-import { isContact } from '../services/schema';
+import { isContact, keyOfId } from '../services/schema';
 import { useRecords, useSync } from '../services/sync';
 import type { Contact, ContactRole } from '../types';
 import { Button, Field, IconButton, Notice, PassphraseModal, ToolHeader, inputClass } from './ui';
@@ -31,7 +31,7 @@ function callCard(node: CallAssignment, t: Translate): string {
 export default function PhoneTree() {
   const t = useT();
   const { privateDoc } = useSync();
-  const { records, map } = useRecords('contacts', isContact, 'private');
+  const { records, map } = useRecords('contacts', isContact, keyOfId, 'private');
   const [draft, setDraft] = useState(EMPTY_CONTACT);
   const [branching, setBranching] = useState(2);
   const [transfer, setTransfer] = useState<{ kind: 'export' } | { kind: 'import'; payload: string } | null>(null);

@@ -1,8 +1,9 @@
 import type { Confirmation, Sighting } from '../types';
+import { keyOfConfirmation } from './schema';
 
 export type AlertState = 'cleared' | 'confirmed' | 'unconfirmed';
 
-export const confirmationKey = (sightingId: string, memberId: string) => `${sightingId}:${memberId}`;
+export const confirmationKey = (sightingId: string, memberId: string) => keyOfConfirmation({ sightingId, memberId });
 
 /** The number of members, other than the reporter, who also saw the activity. */
 export function countConfirmations(sighting: Sighting, confirmations: Confirmation[]): number {

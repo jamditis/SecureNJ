@@ -26,19 +26,27 @@ Two Yjs documents are open at all times.
 
 | Document | Database name | Syncs | Holds |
 | --- | --- | --- | --- |
-| Shared | `snj-local` with no space, or the room ID in a space | Only in a space | Alerts, check-ins, proposals, positions, strokes, posts, shared settings |
+| Shared | `snj-local` with no space, or the room ID in a space | Only in a space | Alerts, confirmations, check-ins, proposals, positions, strokes, posts, claims, shared settings |
 | Private | `snj-private` | Never | Phone tree contacts |
 
 Each tool stores records in a named `Y.Map`. A record is a plain object with an `id`. A write replaces the full record, so the last writer wins for that record. Where two members can act on one item at the same time, each action is its own record:
 
 - A position is stored with the key `proposalId:memberId`.
 - A confirmation of an alert is stored with the key `sightingId:memberId`.
+- The claim state of a mutual aid post is stored in the map `claims` with the post ID as the key. An edit of the post and a claim by a different member then merge.
 
-Shared settings (retention times) are in the map `settings`. They must be shared: an expired record is deleted for the full group, so all members must use the same time.
+Shared settings (retention times) are in the map `settings`. They must be shared: an expired record is deleted for the full group, so all members must use the same time. A tool must not write such a setting on each keystroke: use an explicit save.
+
+### Housekeeping
+
+`SyncProvider` runs housekeeping for the open documents every 30 seconds, for as long as the app is open (`startHousekeeping` in `services/sync.tsx`):
+
+1. `purgeExpired` (`services/retention.ts`) deletes expired alerts and posts, and the confirmations, claims, and positions whose parent record is gone. Tools also hide expired records, so the screen does not depend on the time of the next run.
+2. If the document changed, the browser database is rewritten to hold the current state only. The database is a log of changes. Without this step, the text of a deleted record stays in the log.
 
 ### Records from peers are not trusted
 
-`services/schema.ts` has a type guard for each record type. `useRecords` drops a record that fails its guard. One bad record from one peer cannot stop a tool for the group.
+`services/schema.ts` has a type guard and a key function for each record type. `useRecords` drops a record that fails its guard, and a record whose map key is not the key that its content gives (delete and update use that key, so such a record could not be removed). One bad record from one peer cannot stop a tool for the group.
 
 ## Spaces and sync
 
@@ -55,11 +63,15 @@ With no space, there is no `WebrtcProvider`. The app opens no network connection
 
 ## Identity
 
-Each browser makes a random member ID on first use (`services/identity.ts`). It tells devices apart inside a space: one position for each member, no confirmation of your own report. It is not an account. A member can set a display name.
+Each browser makes a random member ID for each space on first use (`services/identity.ts`). It tells devices apart inside a space: one position for each member, no confirmation of your own report. It is not an account, and the IDs of one device in two spaces have no link. A member can set a display name. "Leave and delete" removes both.
+
+### Leave a space
+
+`leave` closes the WebRTC provider and the connection to the signaling server, tells the other tabs of the browser to leave (a `BroadcastChannel`), and, if the user asks, deletes the space database. If a space cannot open, the provider forgets it and goes back to local mode, so that the app does not fail at each start.
 
 ## Encryption of exports
 
-`services/crypto.ts` has one cipher (AES-256-GCM) and one key derivation (PBKDF2-SHA-256, 600,000 iterations). The file header documents the byte formats. Version 1 text from the first release stays readable.
+`services/crypto.ts` has one cipher (AES-256-GCM) and one key derivation (PBKDF2-SHA-256, 600,000 iterations). The file header documents the byte formats. All version 2 passphrases go through `normalizePassphrase`. Version 1 text from the first release stays readable.
 
 The event page (`services/eventExport.ts`) is one HTML file with the encrypted event and an inline script that decrypts it. That script must match the version 2 text format. A test opens the page in a DOM and decrypts it, and the end-to-end test opens the real file in a browser with no network.
 

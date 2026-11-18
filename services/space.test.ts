@@ -79,6 +79,13 @@ describe('parseSignalingUrls', () => {
     });
   });
 
+  it('refuses ws:// on an HTTPS page, where the browser blocks it, except to this computer', () => {
+    expect(parseSignalingUrls('ws://signal.example:4444 ws://localhost:4444 wss://ok.example', true)).toEqual({
+      urls: ['ws://localhost:4444', 'wss://ok.example'],
+      invalid: ['ws://signal.example:4444'],
+    });
+  });
+
   it('returns nothing for empty text', () => {
     expect(parseSignalingUrls('  ')).toEqual({ urls: [], invalid: [] });
   });

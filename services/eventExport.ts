@@ -72,7 +72,7 @@ const SCRIPT = `
       error.hidden = false;
       return;
     }
-    var passphrase = document.getElementById('passphrase').value;
+    var passphrase = document.getElementById('passphrase').value.normalize('NFKC').trim();
     var sealed = bytesOf(PAYLOAD.slice(5));
     button.disabled = true;
     button.textContent = LABEL_WORKING;

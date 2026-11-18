@@ -1,13 +1,20 @@
 /**
- * End-to-end smoke test. Run `npm run build` first, then `npm run e2e`.
+ * End-to-end smoke test. Run it with `npm run e2e`.
  *
- * It starts the production build and a local signaling server, then uses
- * two separate browser profiles as two members of one space. It fails if:
+ * It builds the app with no STUN server, serves that build, and starts a
+ * local signaling server. Two separate browser profiles act as two members
+ * of one space. The test fails if:
  * - the app does not render,
  * - the two members do not sync over WebRTC,
  * - a member with a wrong passphrase can see the data,
- * - the page makes a request to a host other than this computer,
- * - the browser reports an error (which includes a blocked request).
+ * - the page makes an HTTP request or opens a WebSocket to a host other
+ *   than this computer,
+ * - the browser reports an error (which includes a request that the content
+ *   security policy blocks),
+ * - "leave and delete" keeps the connection open or keeps data on the device.
+ *
+ * - a WebRTC connection is made with a STUN or TURN server, although the
+ *   build under test sets none.
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -16,17 +23,31 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { preview } from 'vite';
+import { build, preview } from 'vite';
 
 const APP_PORT = 4173;
 const SIGNALING_PORT = 4444;
 const SIGNALING_URL = `ws://127.0.0.1:${SIGNALING_PORT}`;
 const SPACE = { name: 'Smoke test', passphrase: 'correct horse battery staple smoke' };
 
+const LOCAL_HOSTS = ['127.0.0.1', 'localhost', ''];
+
 const problems = [];
+/** The WebSockets that each page opened, to check that they close. */
+const sockets = new Map();
 
 async function openMember(browser, appUrl, label) {
   const context = await browser.newContext({ acceptDownloads: true });
+  // Record the STUN and TURN servers of each WebRTC connection that the page makes.
+  await context.addInitScript(() => {
+    const Original = window.RTCPeerConnection;
+    window.iceServersSeen = [];
+    window.RTCPeerConnection = function (config) {
+      window.iceServersSeen.push(config && config.iceServers ? config.iceServers : 'browser default');
+      return new Original(config);
+    };
+    window.RTCPeerConnection.prototype = Original.prototype;
+  });
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() === 'error') problems.push(`${label} console: ${message.text()}`);
@@ -34,7 +55,17 @@ async function openMember(browser, appUrl, label) {
   page.on('pageerror', (error) => problems.push(`${label} error: ${error.message}`));
   page.on('request', (request) => {
     const { hostname } = new URL(request.url());
-    if (!['127.0.0.1', 'localhost', ''].includes(hostname)) problems.push(`${label} external request: ${request.url()}`);
+    if (!LOCAL_HOSTS.includes(hostname)) problems.push(`${label} external request: ${request.url()}`);
+  });
+  sockets.set(page, []);
+  page.on('websocket', (socket) => {
+    const { hostname } = new URL(socket.url());
+    if (!LOCAL_HOSTS.includes(hostname)) problems.push(`${label} external WebSocket: ${socket.url()}`);
+    const entry = { open: true };
+    sockets.get(page).push(entry);
+    socket.on('close', () => {
+      entry.open = false;
+    });
   });
   await page.goto(appUrl);
   await page.getByRole('heading', { name: 'Tools for local resilience' }).waitFor();
@@ -61,7 +92,11 @@ async function main() {
     env: { ...process.env, PORT: String(SIGNALING_PORT) },
     stdio: 'ignore',
   });
-  const server = await preview({ preview: { port: APP_PORT, strictPort: true, host: '127.0.0.1' } });
+  // An empty value turns STUN off. Peers on this computer connect without it.
+  process.env.VITE_ICE_SERVERS = '';
+  const outDir = await mkdtemp(join(tmpdir(), 'snj-e2e-build-'));
+  await build({ build: { outDir, emptyOutDir: true }, logLevel: 'error' });
+  const server = await preview({ build: { outDir }, preview: { port: APP_PORT, strictPort: true, host: '127.0.0.1' } });
   const appUrl = `http://127.0.0.1:${APP_PORT}/`;
   // Without this flag the browser hides local addresses behind mDNS names,
   // which do not resolve in a container.
@@ -94,6 +129,12 @@ async function main() {
     await ana.getByRole('button', { name: 'Send the report' }).click();
     await ben.getByText('Broad St and Market St').waitFor({ timeout: 15_000 });
     assert.equal(await ben.getByText('Local only street').count(), 0, 'local data must not go into the space');
+
+    for (const page of [ana, ben]) {
+      const seen = await page.evaluate(() => window.iceServersSeen);
+      assert.ok(seen.length > 0, 'the members must connect over WebRTC');
+      assert.deepEqual(seen.filter((servers) => servers.length !== 0), [], 'a build with no STUN server must contact no STUN server');
+    }
 
     console.log('3. A confirmation from the second member reaches the reporter');
     await ana.getByText('Not confirmed: one report only').waitFor();
@@ -144,6 +185,26 @@ async function main() {
     await viewer.getByPlaceholder('Passphrase').fill('event passphrase for smoke');
     await viewer.getByRole('button', { name: 'Unlock' }).click();
     await viewer.getByRole('heading', { name: 'Know your rights night' }).waitFor({ timeout: 15_000 });
+
+    console.log('7. Leave and delete: the connection closes and the device keeps no data of the space');
+    assert.ok(sockets.get(ana).some((socket) => socket.open), 'a member of a space has a connection to the signaling server');
+    await ana.getByRole('navigation').getByRole('button', { name: /Smoke test/ }).click();
+    await ana.getByRole('button', { name: 'Leave the space' }).click();
+    await ana.getByRole('heading', { name: 'You work on this device only' }).waitFor();
+    const deadline = Date.now() + 10_000;
+    while (sockets.get(ana).some((socket) => socket.open)) {
+      assert.ok(Date.now() < deadline, 'the signaling connection is open after the member left');
+      await ana.waitForTimeout(200);
+    }
+    const left = await ana.evaluate(async () => ({
+      databases: (await indexedDB.databases()).map((db) => db.name),
+      local: Object.keys(localStorage),
+      session: Object.keys(sessionStorage),
+    }));
+    assert.deepEqual(left.databases.filter((name) => !['snj-local', 'snj-private'].includes(name)), [], 'the space database must be deleted');
+    assert.deepEqual(left.local.filter((key) => key !== 'snj.member.snj-local'), [], 'the member ID and the name of the space must be deleted');
+    assert.deepEqual(left.session, [], 'the passphrase must be deleted');
+    await ben.getByRole('navigation').getByText('Connected peers: 0').waitFor({ timeout: 40_000 });
 
     assert.deepEqual(problems, [], 'the browser reported problems');
     console.log('Smoke test passed.');

@@ -55,7 +55,7 @@ Then type `ws://localhost:4444` in the space dialog.
 npm run build
 ```
 
-Serve the `dist/` folder from any static host over HTTPS. The build uses relative paths, so it works in a subfolder.
+Serve the `dist/` folder from any static host over HTTPS. The build uses relative paths, so it works in a subfolder. Set the response header `Content-Security-Policy: frame-ancestors 'none'` on the host.
 
 Optional build settings go in `.env.local`. See [.env.example](.env.example).
 

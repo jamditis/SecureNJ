@@ -1,7 +1,18 @@
 import { ArrowRight, CloudOff, GitFork, HardDrive, Lock, Users } from 'lucide-react';
 import { alertState } from '../services/alerts';
 import { useT } from '../services/i18n';
-import { isConfirmation, isMutualAidPost, isProposal, isSighting, isStatusUser } from '../services/schema';
+import { statusOf } from '../services/aid';
+import {
+  isAidClaim,
+  isConfirmation,
+  isMutualAidPost,
+  isProposal,
+  isSighting,
+  isStatusUser,
+  keyOfClaim,
+  keyOfConfirmation,
+  keyOfId,
+} from '../services/schema';
 import { needsAttention } from '../services/status';
 import { useRecords, useSync } from '../services/sync';
 import { useNow } from '../services/time';
@@ -18,11 +29,12 @@ export default function Dashboard({ onSelectTool, onOpenSpace }: DashboardProps)
   const t = useT();
   const now = useNow();
   const { space, peers } = useSync();
-  const { records: sightings } = useRecords('sightings', isSighting);
-  const { records: confirmations } = useRecords('confirmations', isConfirmation);
-  const { records: users } = useRecords('users', isStatusUser);
-  const { records: proposals } = useRecords('proposals', isProposal);
-  const { records: posts } = useRecords('posts', isMutualAidPost);
+  const { records: sightings } = useRecords('sightings', isSighting, keyOfId);
+  const { records: confirmations } = useRecords('confirmations', isConfirmation, keyOfConfirmation);
+  const { records: users } = useRecords('users', isStatusUser, keyOfId);
+  const { records: proposals } = useRecords('proposals', isProposal, keyOfId);
+  const { records: posts } = useRecords('posts', isMutualAidPost, keyOfId);
+  const { records: claims } = useRecords('claims', isAidClaim, keyOfClaim);
 
   // What needs attention now, for each tool that has live data.
   const activity: Partial<Record<ToolId, string>> = {};
@@ -32,7 +44,7 @@ export default function Dashboard({ onSelectTool, onOpenSpace }: DashboardProps)
   if (attention > 0) activity['status-board'] = t('dashboard.status', { count: attention });
   const openProposals = proposals.filter((p) => p.status === 'active').length;
   if (openProposals > 0) activity.consensus = t('dashboard.proposals', { count: openProposals });
-  const openRequests = posts.filter((p) => p.type === 'request' && p.status === 'open').length;
+  const openRequests = posts.filter((p) => p.type === 'request' && statusOf(p.id, claims) === 'open').length;
   if (openRequests > 0) activity['mutual-aid'] = t('dashboard.requests', { count: openRequests });
 
   return (

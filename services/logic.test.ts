@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { alertState, countConfirmations } from './alerts';
 import { tallyVotes } from './consensus';
 import { buildPhoneTree, parseContacts, treeDepth } from './phoneTree';
-import { isOverdue, needsAttention, sortForBoard } from './status';
+import { KEEP_CHECK_IN, isOverdue, makeStatusUpdate, needsAttention, sortForBoard } from './status';
 import { isFarEnough, isNearStroke, lastStrokeOf, toBoardPoint } from './whiteboard';
 import type { Contact, Sighting, StatusUser, Vote, VoteType, WhiteboardStroke } from '../types';
 
@@ -159,6 +159,14 @@ describe('group check-in', () => {
     expect(needsAttention(user('a', { status: 'support' }), NOW)).toBe(true);
     expect(needsAttention(user('a', { status: 'detained' }), NOW)).toBe(true);
     expect(needsAttention(user('a', { checkInBy: NOW - 1 }), NOW)).toBe(true);
+  });
+
+  it('keeps the check-in time when the member changes only the note', () => {
+    const current = user('a', { status: 'transit', checkInBy: NOW + 30 * 60_000 });
+    const input = { id: 'a', name: 'a', status: 'transit' as const, note: 'at the door', current };
+    expect(makeStatusUpdate({ ...input, checkInMinutes: KEEP_CHECK_IN }).checkInBy).toBe(current.checkInBy);
+    expect(makeStatusUpdate({ ...input, checkInMinutes: 0 }).checkInBy).toBeNull();
+    expect(makeStatusUpdate({ ...input, checkInMinutes: KEEP_CHECK_IN, current: undefined }).checkInBy).toBeNull();
   });
 
   it('shows members who need attention first', () => {

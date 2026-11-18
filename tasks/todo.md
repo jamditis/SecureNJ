@@ -78,4 +78,34 @@ Platform:
 
 ## Review
 
-See the end of this file after the review agents finish.
+Two independent review agents read pull request 1 before merge: one for security, one for correctness. They reported 14 and 13 findings. Two were the same defect. All confirmed findings are fixed in the second commit, each with a test, except the items in the list below.
+
+Fixed after review:
+
+- The signaling connection stayed open after "leave the space".
+- The text of deleted and expired records stayed in the browser database log.
+- Expiry ran only while the alerts tool or the aid tool was open.
+- "Leave and delete" kept the member ID and the name, did not wait for the delete, and did not reach other tabs.
+- One member ID linked a device across all spaces. The ID is now different in each space.
+- The retention field of the aid board deleted posts for the space on each keystroke.
+- A post and its claim state shared one record, so a concurrent edit and claim lost one.
+- A space that could not open locked the user out at each start. A `ws://` address on an HTTPS page is now refused.
+- A record under a wrong map key could not be deleted.
+- The encrypted file name showed the original file name.
+- Imported posts kept unknown fields and future times, and expired posts were "added" and then deleted.
+- Passphrases were not put in one Unicode form for exports.
+- A weak space passphrase got only a warning.
+- Whiteboard: a second pointer broke the line, and a redraw removed the line in progress.
+- Dialogs: no focus handling, and Escape closed all open dialogs.
+- An edit of a status removed its check-in time.
+- The file field kept the old file after a mode change.
+- The "database not available" message could not show.
+- The end-to-end test could not see WebSockets or the STUN server list.
+- Three UI texts claimed more than the code did.
+
+Accepted and documented in `docs/security.md`, not fixed:
+
+- Retention depends on the clock and the sync state of each device (limit 6). A fix needs a trusted time source or a different delete model.
+- The content security policy permits a WebSocket to any host, because the group sets the signaling server at run time.
+- A signaling server can replay old "announce" messages and show false peers. This is in `y-webrtc`.
+- The event page is not signed (limit 12).

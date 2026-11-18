@@ -1,5 +1,14 @@
 /** Small shared parts that all tools use. Keep this file free of tool logic. */
-import { useEffect, useId, useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { Dices, Eye, EyeOff, HardDrive, Lock, Wifi, WifiOff, X, type LucideIcon } from 'lucide-react';
 import { useT } from '../services/i18n';
 import { generatePassphrase, isWeakPassphrase } from '../services/passphrase';
@@ -109,22 +118,59 @@ export function ToolHeader({ title, subtitle, synced = true, children }: ToolHea
   );
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])';
+
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const t = useT();
   const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // The opener is read at the first render. After that, a field with
+  // autoFocus inside the dialog has the focus.
+  const [opener] = useState(() => document.activeElement);
+
+  // Move the focus into the dialog, and give it back to the opener on close.
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.contains(document.activeElement)) dialog.focus();
+    return () => {
+      if (opener instanceof HTMLElement) opener.focus();
+    };
+  }, [opener]);
+
+  // The handler is on the dialog, so only the dialog that has the focus
+  // answers. Escape then closes one dialog, not all dialogs that are open.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    // Keep the focus inside the dialog.
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 overflow-y-auto">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-2xl space-y-5 my-auto"
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-2xl space-y-5 my-auto outline-none"
       >
         <div className="flex items-center justify-between gap-4">
           <h3 id={titleId} className="text-xl font-bold text-slate-900">

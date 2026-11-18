@@ -11,7 +11,7 @@ export type Outcome = 'none' | 'blocked' | 'reservations' | 'consensus' | 'no-su
 
 export type Tally = Record<VoteType, number> & { total: number; outcome: Outcome };
 
-export const voteKey = (proposalId: string, memberId: string) => `${proposalId}:${memberId}`;
+export const voteKey = (proposalId: string, memberId: string) => `${proposalId}:${memberId}`; // Same form as keyOfVote in schema.ts.
 
 export function tallyVotes(votes: Vote[]): Tally {
   const counts: Record<VoteType, number> = { support: 0, reservations: 0, 'stand-aside': 0, block: 0 };
