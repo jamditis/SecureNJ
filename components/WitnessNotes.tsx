@@ -134,6 +134,8 @@ export default function WitnessNotes() {
             onChange: (event: { target: { value: string } }) => changeAnswer(field.id, event.target.value),
             'aria-describedby': `${id}-hint`,
             className: inputClass,
+            // Notes can be in a different language than the UI.
+            dir: 'auto',
           };
           return (
             <div key={field.id} className="space-y-1.5">

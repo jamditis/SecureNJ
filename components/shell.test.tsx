@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { I18nContext, i18nFor } from '../services/i18n';
+import { I18nContext, I18nProvider, i18nFor } from '../services/i18n';
 import { hasUnsavedWork, useUnsavedWork } from '../services/unsaved';
 import { TOOLS, readRoute } from '../tools';
 import LanguageSwitch from './LanguageSwitch';
@@ -47,6 +47,29 @@ describe('language switch', () => {
     render(<LanguageSwitch />);
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByLabelText('Language')).toBeTruthy();
+  });
+});
+
+describe('page language and direction', () => {
+  afterEach(() => {
+    localStorage.removeItem('snj.locale');
+    document.documentElement.removeAttribute('dir');
+    document.documentElement.removeAttribute('lang');
+  });
+
+  it.each([
+    ['ar', 'ar', 'rtl'],
+    ['pt', 'pt-BR', 'ltr'],
+    ['en', 'en', 'ltr'],
+  ])('gives the page the language tag and the direction of the saved language %s', (saved, lang, dir) => {
+    localStorage.setItem('snj.locale', saved);
+    render(
+      <I18nProvider>
+        <p />
+      </I18nProvider>,
+    );
+    expect(document.documentElement.lang).toBe(lang);
+    expect(document.documentElement.dir).toBe(dir);
   });
 });
 

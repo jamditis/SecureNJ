@@ -115,8 +115,8 @@ export default function SupplyInventory() {
               <article key={item.id} className={`bg-white p-6 rounded-3xl border space-y-3 ${low ? 'border-red-300' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="font-bold text-slate-900 text-lg leading-tight break-words">{item.name}</h3>
-                    {item.location && <p className="text-sm text-slate-500 break-words">{item.location}</p>}
+                    <h3 dir="auto" className="font-bold text-slate-900 text-lg leading-tight break-words">{item.name}</h3>
+                    {item.location && <p dir="auto" className="text-sm text-slate-500 break-words">{item.location}</p>}
                   </div>
                   <div className="flex shrink-0">
                     <IconButton
@@ -128,10 +128,10 @@ export default function SupplyInventory() {
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-slate-900">
-                  {quantity} <span className="text-base font-bold text-slate-500">{item.unit}</span>
+                  {quantity} <bdi className="text-base font-bold text-slate-500">{item.unit}</bdi>
                 </p>
                 {low && <p className="text-xs font-bold text-red-700">{t('supplies.low', { level: item.lowAt })}</p>}
-                {item.notes && <p className="text-sm text-slate-600 break-words whitespace-pre-wrap">{item.notes}</p>}
+                {item.notes && <p dir="auto" className="text-sm text-slate-600 break-words whitespace-pre-wrap">{item.notes}</p>}
                 <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
                   <Button variant="light" disabled={quantity <= 0} onClick={() => adjust(item, -amount)} aria-label={t('supplies.take', { name: item.name })}>
                     <Minus className="w-4 h-4" aria-hidden="true" /> {t('supplies.takeShort')}
@@ -158,7 +158,7 @@ export default function SupplyInventory() {
         <Modal title={editing.id ? t('supplies.editTitle') : t('supplies.new')} onClose={() => setEditing(null)}>
           <form onSubmit={save} className="space-y-4">
             <Field label={t('supplies.field.name')}>
-              <input {...field('name')} autoFocus required />
+              <input {...field('name')} dir="auto" autoFocus required />
             </Field>
             <div className="grid grid-cols-2 gap-4">
               {!editing.id && (
@@ -167,17 +167,17 @@ export default function SupplyInventory() {
                 </Field>
               )}
               <Field label={t('supplies.field.unit')}>
-                <input {...field('unit')} placeholder={t('supplies.hint.unit')} />
+                <input {...field('unit')} dir="auto" placeholder={t('supplies.hint.unit')} />
               </Field>
               <Field label={t('supplies.field.lowAt')}>
                 <input type="number" min={0} {...field('lowAt')} />
               </Field>
             </div>
             <Field label={t('supplies.field.location')}>
-              <input {...field('location')} />
+              <input {...field('location')} dir="auto" />
             </Field>
             <Field label={t('supplies.field.notes')}>
-              <textarea {...field('notes')} rows={2} />
+              <textarea {...field('notes')} dir="auto" rows={2} />
             </Field>
             <div className="flex gap-3">
               <Button variant="ghost" className="flex-1" onClick={() => setEditing(null)}>

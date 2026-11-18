@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), htmlMeta(env.VITE_SITE_URL ?? '')],
     test: {
       environment: 'node',
-      include: ['services/**/*.test.{ts,tsx}', 'components/**/*.test.tsx', 'scripts/**/*.test.ts'],
+      include: ['services/**/*.test.{ts,tsx}', 'components/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
       setupFiles: ['./test-setup.ts'],
       restoreMocks: true,
     },

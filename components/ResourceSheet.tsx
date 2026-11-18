@@ -26,11 +26,12 @@ const linkClass = 'underline underline-offset-2 hover:text-emerald-700 print:no-
 /** A contact shows as a link only if `contactHref` allows its address. */
 function Contact({ value }: { value: string }) {
   const href = contactHref(value);
-  if (!href) return <span className="block font-semibold break-words">{value}</span>;
+  if (!href) return <span dir="auto" className="block font-semibold break-words">{value}</span>;
   const web = href.startsWith('http');
   return (
     <a href={href} target={web ? '_blank' : undefined} rel={web ? 'noopener noreferrer' : undefined} className={`block font-semibold break-words ${linkClass}`}>
-      {value}
+      {/* A phone number, an email, or a web address reads left to right in each language. The line keeps the alignment of the sheet. */}
+      <span dir="ltr">{value}</span>
     </a>
   );
 }
@@ -82,10 +83,10 @@ export default function ResourceSheet() {
 
         <div className="bg-white p-6 rounded-3xl border border-slate-200 space-y-4">
           <Field label={t('sheet.field.title')}>
-            <input value={sheet.title} onChange={(event) => apply({ ...sheet, title: event.target.value })} className={inputClass} />
+            <input value={sheet.title} onChange={(event) => apply({ ...sheet, title: event.target.value })} dir="auto" className={inputClass} />
           </Field>
           <Field label={t('sheet.field.note')}>
-            <input value={sheet.note} placeholder={text.noteExample} onChange={(event) => apply({ ...sheet, note: event.target.value })} className={inputClass} />
+            <input value={sheet.note} dir="auto" placeholder={text.noteExample} onChange={(event) => apply({ ...sheet, note: event.target.value })} className={inputClass} />
           </Field>
         </div>
 
@@ -100,6 +101,7 @@ export default function ResourceSheet() {
                     <input
                       value={entry[field]}
                       onChange={(event) => apply({ ...sheet, entries: updateListing(sheet.entries, entry.id, field, event.target.value) })}
+                      dir="auto"
                       className={inputClass}
                     />
                   </Field>
@@ -162,17 +164,17 @@ export default function ResourceSheet() {
       </div>
 
       <section aria-label={t('sheet.sheetLabel')} className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 space-y-4 text-slate-900 print:border-0 print:p-0 print:rounded-none">
-        {sheet.title && <h3 className="text-2xl font-bold break-words">{sheet.title}</h3>}
-        {sheet.note && <p className="text-sm text-slate-600 break-words">{sheet.note}</p>}
+        {sheet.title && <h3 dir="auto" className="text-2xl font-bold break-words">{sheet.title}</h3>}
+        {sheet.note && <p dir="auto" className="text-sm text-slate-600 break-words">{sheet.note}</p>}
         {listed.length === 0 ? (
           <p className="no-print text-sm text-slate-500">{t('sheet.empty')}</p>
         ) : (
           <ul className="space-y-4">
             {listed.map((entry) => (
               <li key={entry.id} className="text-sm leading-relaxed break-inside-avoid">
-                <strong className="block text-base break-words">{entry.name}</strong>
-                {entry.offers && <span className="block break-words">{entry.offers}</span>}
-                {entry.when && <span className="block break-words">{entry.when}</span>}
+                <strong dir="auto" className="block text-base break-words">{entry.name}</strong>
+                {entry.offers && <span dir="auto" className="block break-words">{entry.offers}</span>}
+                {entry.when && <span dir="auto" className="block break-words">{entry.when}</span>}
                 {entry.contact && <Contact value={entry.contact} />}
               </li>
             ))}

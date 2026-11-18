@@ -135,7 +135,7 @@ export default function Dashboard({ onSelectTool }: { onSelectTool: (id: ToolId)
                     </h4>
                     <p className="text-slate-600 text-sm leading-relaxed">{t(tool.description)}</p>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 shrink-0 mt-1" aria-hidden="true" />
+                  <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 shrink-0 mt-1 rtl:-scale-x-100" aria-hidden="true" />
                 </button>
               );
             })}

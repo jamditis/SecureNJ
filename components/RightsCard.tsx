@@ -54,6 +54,8 @@ export default function RightsCard() {
       maxLength={CONTACT_MAX_LENGTH}
       autoComplete="off"
       aria-describedby={hintId}
+      // A name and a phone number take the direction of their own text.
+      dir="auto"
       className={inputClass}
     />
   );
@@ -144,7 +146,7 @@ export default function RightsCard() {
             {rows.map((row) => (
               <Fragment key={row.key}>
                 <dt className="font-bold">{card.contactLabels[row.key]}</dt>
-                <dd className="break-words min-w-0">{row.value}</dd>
+                <dd dir="auto" className="break-words min-w-0">{row.value}</dd>
               </Fragment>
             ))}
           </dl>

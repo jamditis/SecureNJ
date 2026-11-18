@@ -80,8 +80,8 @@ function OpenDialog({ onSubmit, onClose }: OpenDialogProps) {
 
 /**
  * The plan is in the memory of this page only. It goes to the device as a
- * locked file, or to paper. The prompts are reference content in English,
- * so they carry `lang="en"`. An answer can be in any language.
+ * locked file, or to paper. The prompts are reference content, shown in the
+ * language of the page. An answer can be in any language.
  */
 export default function FamilyPlan() {
   const t = useT();
@@ -205,6 +205,8 @@ export default function FamilyPlan() {
                   setPlan((current) => setAnswer(current, item.id, value));
                 },
                 className: `${inputClass} print:hidden`,
+                // An answer, a name or a phone number, takes the direction of its own text.
+                dir: 'auto',
               };
               return (
                 <div key={item.id} className="space-y-1.5 print:break-inside-avoid">
@@ -218,7 +220,7 @@ export default function FamilyPlan() {
                   )}
                   {item.long ? <textarea rows={3} {...control} /> : <input autoComplete="off" {...control} />}
                   {/* On paper, a field cuts a long answer off. This copy grows with the answer, and an empty one leaves a line to write on. */}
-                  <p className={`hidden print:block whitespace-pre-wrap break-words text-sm text-black border-b border-black ${item.long ? 'min-h-20' : 'min-h-8'}`}>
+                  <p dir="auto" className={`hidden print:block whitespace-pre-wrap break-words text-sm text-black border-b border-black ${item.long ? 'min-h-20' : 'min-h-8'}`}>
                     {answer}
                   </p>
                 </div>

@@ -145,8 +145,10 @@ export default function PhotoCleaner() {
                 <Undo2 className="w-4 h-4" aria-hidden="true" /> {t('photo.undo')}
               </Button>
             </div>
+            {/* A cover is at a point of the photo, from its left edge. The photo never mirrors. */}
             <canvas
               ref={canvasRef}
+              dir="ltr"
               role="img"
               aria-label={t('photo.canvasLabel')}
               onClick={addCover}

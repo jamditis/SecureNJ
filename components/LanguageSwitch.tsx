@@ -23,7 +23,7 @@ export default function LanguageSwitch() {
           className="flex-1 bg-slate-800 text-white rounded-lg px-2 py-1.5 text-sm"
         >
           {(Object.keys(LOCALES) as Locale[]).map((code) => (
-            <option key={code} value={code} lang={code}>
+            <option key={code} value={code} lang={LOCALES[code].htmlLang} dir={LOCALES[code].dir}>
               {LOCALES[code].label}
             </option>
           ))}

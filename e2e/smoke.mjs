@@ -17,7 +17,9 @@
  * - the app does not open with no connection after the first visit,
  * - "erase all data" leaves a database, a stored value, a cached file, or a
  *   service worker in the browser,
- * - an invite link holds the passphrase or does not fill in the space.
+ * - an invite link holds the passphrase or does not fill in the space,
+ * - in Arabic, the page is not right to left, the sidebar is not on the
+ *   right, a page scrolls sideways, or the whiteboard mirrors a line.
  *
  * - a WebRTC connection is made with a STUN or TURN server, although the
  *   build under test sets none.
@@ -30,6 +32,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { build, preview } from 'vite';
+import * as Y from 'yjs';
 
 const APP_PORT = 4173;
 const SIGNALING_PORT = 4444;
@@ -332,6 +335,77 @@ async function main() {
     assert.equal(left.databases.filter((name) => !['snj-local', 'snj-private'].includes(name)).length, 1, 'the database of the cleared room must be deleted');
     assert.equal(left.memberKeys.length, 1, 'the member ID of the cleared room must be deleted');
     assert.equal(JSON.parse(left.registry).length, 1, 'the cleared room must be removed from the list of databases');
+
+    // This section is last, so the Arabic UI does not change the sections before it.
+    // Its selectors do not use text: the Arabic text file can be incomplete.
+    console.log('8. In Arabic the layout is right to left, with no sideways scroll, and the whiteboard does not mirror');
+    const rtl = await openMember(browser, appUrl, 'rtl');
+    await rtl.setViewportSize({ width: 1280, height: 800 });
+    await rtl.locator('nav select:has(option[lang="ar"])').selectOption('ar');
+    await rtl.waitForFunction(() => document.documentElement.dir === 'rtl');
+    assert.equal(await rtl.evaluate(() => document.documentElement.lang), 'ar');
+    // The sidebar slides. Measure after the slide ends.
+    const settled = () => rtl.waitForFunction(() => document.getAnimations().length === 0);
+    await settled();
+    const sidebar = await rtl.getByRole('navigation').boundingBox();
+    const content = await rtl.locator('main').boundingBox();
+    assert.ok(sidebar.x >= content.x + content.width - 1, 'in Arabic the sidebar must be on the right of the main area');
+    assert.ok(sidebar.x + sidebar.width <= 1280 + 1, 'in Arabic the sidebar must be inside the window');
+    const pages = ['dashboard', 'phone-tree', 'family-plan', 'supply-inventory'];
+    for (const [width, height] of [
+      [1280, 800],
+      [390, 844],
+    ]) {
+      await rtl.setViewportSize({ width, height });
+      for (const name of pages) {
+        await rtl.evaluate((hash) => {
+          window.location.hash = hash;
+        }, `#/${name}`);
+        await rtl.locator('main h2').first().waitFor();
+        await settled();
+        const size = await rtl.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+        assert.ok(size.scroll <= size.client, `#/${name} at ${width} px must not scroll sideways in Arabic (${size.scroll} > ${size.client})`);
+      }
+    }
+    await rtl.setViewportSize({ width: 1280, height: 800 });
+    await rtl.evaluate(() => {
+      window.location.hash = '#/whiteboard';
+    });
+    // The room form has two buttons of its own: "open room" and "use on this device only".
+    await rtl.locator('main form > button[type=button]').click();
+    const board = rtl.locator('main canvas');
+    await board.scrollIntoViewIfNeeded();
+    const area = await board.boundingBox();
+    await rtl.mouse.move(area.x + area.width * 0.1, area.y + area.height * 0.3);
+    await rtl.mouse.down();
+    await rtl.mouse.move(area.x + area.width * 0.3, area.y + area.height * 0.6, { steps: 10 });
+    await rtl.mouse.up();
+    // The browser database writes after the change.
+    await rtl.waitForTimeout(500);
+    const updates = await rtl.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const request = indexedDB.open('snj-local');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const db = request.result;
+            const all = db.transaction('updates').objectStore('updates').getAll();
+            all.onsuccess = () => {
+              db.close();
+              resolve(all.result.map((update) => Array.from(update)));
+            };
+            all.onerror = () => reject(all.error);
+          };
+        }),
+    );
+    const boardDoc = new Y.Doc();
+    for (const update of updates) Y.applyUpdate(boardDoc, Uint8Array.from(update));
+    const strokes = [...boardDoc.getMap('strokes').values()];
+    assert.equal(strokes.length, 1, 'the line drawn in Arabic must be stored');
+    const xs = strokes[0].points.filter((_, index) => index % 2 === 0);
+    assert.ok(xs.length > 1 && xs.every((x) => x > 0.05 && x < 0.5), `a line in the left third must be stored on the left (${xs.join(', ')})`);
+    await rtl.locator('nav select').selectOption('en');
+    await rtl.waitForFunction(() => document.documentElement.dir === 'ltr');
 
     assert.deepEqual(problems, [], 'the browser reported problems');
     console.log('Smoke test passed.');

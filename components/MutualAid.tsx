@@ -159,7 +159,6 @@ export default function MutualAid() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t('aid.search')}
             aria-label={t('aid.search')}
-            dir="auto"
             className={`${inputClass} ps-9`}
           />
         </div>

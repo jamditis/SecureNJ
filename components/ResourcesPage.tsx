@@ -51,7 +51,9 @@ export default function ResourcesPage() {
                   aria-label={t('resources.linkLabel', { name: item.name })}
                   className="inline-flex items-start gap-1.5 font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
                 >
-                  <span lang="en">{item.name}</span>
+                  <span lang="en" dir="ltr">
+                    {item.name}
+                  </span>
                   <ExternalLink className="w-3.5 h-3.5 mt-1 shrink-0" aria-hidden="true" />
                 </a>
                 <p className="text-slate-600 text-sm leading-relaxed mt-1">

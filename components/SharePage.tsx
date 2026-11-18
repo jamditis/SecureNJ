@@ -23,7 +23,8 @@ function RichText({ message }: { message: string }) {
       {parseRich(message).map((part, index) => {
         if (part.kind === 'code') {
           return (
-            <code key={index} className="font-mono text-[0.9em] bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded break-words">
+            // A command or an address reads left to right in each language.
+            <code key={index} dir="ltr" className="font-mono text-[0.9em] bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded break-words">
               {part.text}
             </code>
           );
@@ -105,7 +106,9 @@ export default function SharePage() {
             <div className="flex-1 min-w-0 space-y-3">
               <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t('sharePage.flyerTitle')}</h3>
               <p className="text-slate-700">{t('sharePage.flyerIntro')}</p>
-              <p className="font-bold text-slate-900 [overflow-wrap:anywhere]">{address}</p>
+              <p className="font-bold text-slate-900 [overflow-wrap:anywhere]">
+                <span dir="ltr">{address}</span>
+              </p>
               <ul className="list-disc ps-5 space-y-1 text-slate-700">
                 {flyerTools().map((tool) => (
                   <li key={tool.id}>

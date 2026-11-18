@@ -76,6 +76,8 @@ export default function Sightings() {
     value: report[key],
     onChange: (event: { target: { value: string } }) => setReport({ ...report, [key]: event.target.value }),
     className: inputClass,
+    // A report can be in a different language than the UI.
+    dir: 'auto',
   });
 
   return (
@@ -132,15 +134,15 @@ export default function Sightings() {
                 </p>
                 <h3 className="font-bold text-slate-900 text-lg flex items-start gap-2">
                   <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="break-words min-w-0">{item.location}</span>
+                  <span dir="auto" className="break-words min-w-0">{item.location}</span>
                 </h3>
-                {item.description && <p className="text-slate-600 text-sm break-words whitespace-pre-wrap">{item.description}</p>}
+                {item.description && <p dir="auto" className="text-slate-600 text-sm break-words whitespace-pre-wrap">{item.description}</p>}
                 {details.length > 0 && (
                   <dl className="text-xs text-slate-600 space-y-1">
                     {details.map((key) => (
                       <div key={key}>
                         <dt className="inline font-bold">{t(`alerts.field.${key}`)}: </dt>
-                        <dd className="inline break-words">{item[key]}</dd>
+                        <dd dir="auto" className="inline break-words">{item[key]}</dd>
                       </div>
                     ))}
                   </dl>
