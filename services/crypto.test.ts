@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DecryptionError,
+  WeakPassphraseError,
   MAX_CONTAINER_BYTES,
   MAX_FILE_BYTES,
   base64ToBytes,
@@ -15,14 +16,14 @@ import {
 const PASSPHRASE = 'correct horse battery staple';
 
 /** Makes a version 1 payload in the same way as the first release of the app. */
-async function encryptLegacy(text: string, passphrase: string): Promise<string> {
+async function encryptLegacy(text: string, passphrase: string, iterations = 100_000): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, [
     'deriveKey',
   ]);
   const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     material,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -89,6 +90,24 @@ describe('text encryption', () => {
     const decomposed = 'cafe\u0301 au lait matin ';
     const sealed = await encryptText('secret', composed);
     expect(await decryptText(sealed, decomposed)).toBe('secret');
+  });
+
+  it('refuses to encrypt with a weak passphrase, in each encrypt function', async () => {
+    await expect(encryptText('secret', 'short')).rejects.toBeInstanceOf(WeakPassphraseError);
+    await expect(encryptText('secret', 'password-password')).rejects.toBeInstanceOf(WeakPassphraseError);
+    await expect(encryptBytes(new Uint8Array(1), 'aaaaaaaaaaaaaaaa')).rejects.toBeInstanceOf(WeakPassphraseError);
+    await expect(encryptFile({ name: 'a', type: '', bytes: new Uint8Array(1) }, 'short')).rejects.toBeInstanceOf(WeakPassphraseError);
+  });
+
+  it('still decrypts old data that was made with a weak passphrase', async () => {
+    const legacy = await encryptLegacy('old message', 'weak');
+    expect(await decryptText(legacy, 'weak')).toBe('old message');
+  });
+
+  it('reads locked text from the published site, which used 600,000 iterations and no prefix', async () => {
+    const fromSite = await encryptLegacy('message from the site', PASSPHRASE, 600_000);
+    expect(await decryptText(fromSite, PASSPHRASE)).toBe('message from the site');
+    await expect(decryptText(fromSite, 'not the passphrase')).rejects.toBeInstanceOf(DecryptionError);
   });
 
   it('reads a version 1 payload', async () => {

@@ -1,5 +1,15 @@
+/** Each page of the app: the start page, the three information pages, and the tools. */
 export type ToolId =
   | 'dashboard'
+  | 'limits'
+  | 'resources'
+  | 'share'
+  | 'lock-file'
+  | 'rights-card'
+  | 'family-plan'
+  | 'witness-notes'
+  | 'photo-cleaner'
+  | 'resource-sheet'
   | 'safety-alerts'
   | 'status-board'
   | 'consensus'
@@ -7,6 +17,8 @@ export type ToolId =
   | 'event-creator'
   | 'phone-tree'
   | 'mutual-aid'
+  | 'shift-roster'
+  | 'supply-inventory'
   | 'secure-share';
 
 export interface EventDetails {

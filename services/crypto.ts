@@ -5,12 +5,15 @@
  *
  * Formats:
  * - Text, version 2: "snj2." + base64(salt[16] | iv[12] | ciphertext). 600,000 iterations.
- * - Text, version 1 (read only): base64(salt[16] | iv[12] | ciphertext). 100,000 iterations.
+ * - Text with no prefix (read only): base64(salt[16] | iv[12] | ciphertext). The published
+ *   site made it with 600,000 iterations, and the first release with 100,000.
  * - File, version 2: "SNJ2" | salt[16] | iv[12] | ciphertext. The plaintext is
  *   headerLength[4, big endian] | header JSON {name, type} | file bytes.
  *
  * `docs/security.md` gives the limits of this design.
  */
+
+import { normalizePassphrase, passphraseProblem, type PassphraseProblem } from './passphrase';
 
 export const KDF_ITERATIONS = 600_000;
 const LEGACY_KDF_ITERATIONS = 100_000;
@@ -28,8 +31,18 @@ export const MAX_FILE_BYTES = 100 * 1024 * 1024;
  */
 export const MAX_CONTAINER_BYTES = MAX_FILE_BYTES + 64 * 1024;
 
+export { normalizePassphrase };
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
+
+/** Thrown when code tries to encrypt with a passphrase that `passphraseProblem` refuses. */
+export class WeakPassphraseError extends Error {
+  constructor(readonly problem: PassphraseProblem) {
+    super(`The passphrase is too weak (${problem}).`);
+    this.name = 'WeakPassphraseError';
+  }
+}
 
 /** The passphrase is wrong, or the data is damaged. AES-GCM cannot tell which. */
 export class DecryptionError extends Error {
@@ -64,14 +77,6 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Two devices can encode the same typed passphrase in different ways, and a
- * paste can add a space. Version 2 uses this form for all passphrases.
- */
-export function normalizePassphrase(passphrase: string): string {
-  return passphrase.normalize('NFKC').trim();
-}
-
 async function deriveKey(passphrase: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const subtle = globalThis.crypto.subtle;
   const material = await subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
@@ -86,6 +91,9 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
 
 /** Returns salt | iv | ciphertext. */
 export async function encryptBytes(data: Uint8Array, passphrase: string): Promise<Uint8Array> {
+  // All encryption goes through this function, so the rule holds for each tool.
+  const problem = passphraseProblem(passphrase);
+  if (problem) throw new WeakPassphraseError(problem);
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const key = await deriveKey(normalizePassphrase(passphrase), salt, KDF_ITERATIONS);
@@ -118,6 +126,19 @@ async function open(sealed: Uint8Array, passphrase: string, iterations: number):
   }
 }
 
+/**
+ * Text with no version prefix comes from one of two older releases. Both
+ * used the passphrase as typed. The published site used 600,000
+ * iterations, and the first release used 100,000.
+ */
+async function openLegacy(sealed: Uint8Array, passphrase: string): Promise<Uint8Array> {
+  try {
+    return await open(sealed, passphrase, KDF_ITERATIONS);
+  } catch {
+    return open(sealed, passphrase, LEGACY_KDF_ITERATIONS);
+  }
+}
+
 export async function encryptText(text: string, passphrase: string): Promise<string> {
   return TEXT_PREFIX + bytesToBase64(await encryptBytes(encoder.encode(text), passphrase));
 }
@@ -131,8 +152,7 @@ export async function decryptText(payload: string, passphrase: string): Promise<
   } catch {
     throw new DecryptionError();
   }
-  // Version 1 used the passphrase as typed.
-  const plain = isCurrent ? await decryptBytes(sealed, passphrase) : await open(sealed, passphrase, LEGACY_KDF_ITERATIONS);
+  const plain = isCurrent ? await decryptBytes(sealed, passphrase) : await openLegacy(sealed, passphrase);
   try {
     return decoder.decode(plain);
   } catch {

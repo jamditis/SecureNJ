@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Archive, CheckCircle2, Hand, Lock, Plus, ThumbsUp, Trash2, Unlock, XOctagon, type LucideIcon } from 'lucide-react';
 import { tallyVotes, voteKey, type Outcome } from '../services/consensus';
 import { useT } from '../services/i18n';
+import { deleteRecords } from '../services/retention';
 import { isProposal, isVote, keyOfId, keyOfVote } from '../services/schema';
 import { useRecords, useSync } from '../services/sync';
 import type { Proposal, Vote, VoteType } from '../types';
@@ -57,7 +58,7 @@ export default function ConsensusBuilder() {
   const remove = (proposal: Proposal) => {
     if (!window.confirm(t('consensus.deleteConfirm'))) return;
     doc.transact(() => {
-      proposalMap.delete(proposal.id);
+      deleteRecords(doc, 'proposals', [proposal.id]);
       // The map can hold a bad record from a peer, so check each value.
       voteMap.forEach((vote: unknown, key) => {
         if (isVote(vote) && vote.proposalId === proposal.id) voteMap.delete(key);

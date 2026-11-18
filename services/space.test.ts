@@ -1,57 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { generatePassphrase, isWeakPassphrase } from './passphrase';
+import { GENERATOR_WORDS, generatePassphrase, passphraseProblem } from './passphrase';
 import {
-  clearSavedSpace,
-  deriveSpaceKeys,
-  loadSavedSpace,
+  deriveRoomKeys,
   normalizeSpaceName,
   parseSignalingUrls,
-  saveSpace,
-  type SpaceConfig,
 } from './space';
 
-class MemoryStorage implements Storage {
-  private items = new Map<string, string>();
-  get length() {
-    return this.items.size;
-  }
-  clear() {
-    this.items.clear();
-  }
-  getItem(key: string) {
-    return this.items.get(key) ?? null;
-  }
-  key(index: number) {
-    return Array.from(this.items.keys())[index] ?? null;
-  }
-  removeItem(key: string) {
-    this.items.delete(key);
-  }
-  setItem(key: string, value: string) {
-    this.items.set(key, value);
-  }
-}
-
-describe('deriveSpaceKeys', () => {
-  it('gives the same keys to all members who type the same name and passphrase', async () => {
-    const a = await deriveSpaceKeys('Newark Rapid Response', 'six random words go right here');
-    const b = await deriveSpaceKeys('  newark   rapid response ', 'six random words go right here ');
+describe('deriveRoomKeys', () => {
+  it('gives the same keys to all members who type the same name and passphrase for one tool', async () => {
+    const a = await deriveRoomKeys('mutual-aid', 'Newark Rapid Response', 'six random words go right here');
+    const b = await deriveRoomKeys('mutual-aid', '  newark   rapid response ', 'six random words go right here ');
     expect(a).toEqual(b);
     expect(a.roomId).toMatch(/^snj-[0-9a-f]{32}$/);
     expect(a.roomPassword).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('gives each tool its own room for the same name and passphrase', async () => {
+    const aid = await deriveRoomKeys('mutual-aid', 'group', 'river tulip nine window');
+    const alerts = await deriveRoomKeys('safety-alerts', 'group', 'river tulip nine window');
+    expect(alerts.roomId).not.toBe(aid.roomId);
+    expect(alerts.roomPassword).not.toBe(aid.roomPassword);
+  });
+
   it('gives a different room for a different passphrase or a different name', async () => {
-    const base = await deriveSpaceKeys('group', 'passphrase one');
-    const otherPassphrase = await deriveSpaceKeys('group', 'passphrase two');
-    const otherName = await deriveSpaceKeys('group 2', 'passphrase one');
+    const base = await deriveRoomKeys('consensus', 'group', 'river tulip nine window');
+    const otherPassphrase = await deriveRoomKeys('consensus', 'group', 'river tulip nine door');
+    const otherName = await deriveRoomKeys('consensus', 'group 2', 'river tulip nine window');
     expect(otherPassphrase.roomId).not.toBe(base.roomId);
     expect(otherPassphrase.roomPassword).not.toBe(base.roomPassword);
     expect(otherName.roomId).not.toBe(base.roomId);
   });
 
   it('does not put the name or the passphrase in the room ID', async () => {
-    const keys = await deriveSpaceKeys('visible', 'hunter2hunter2');
+    const keys = await deriveRoomKeys('consensus', 'visible', 'hunter2hunter2');
     expect(keys.roomId).not.toContain('visible');
     expect(keys.roomId).not.toContain('hunter2');
     expect(keys.roomPassword).not.toBe(keys.roomId.slice(4));
@@ -91,43 +72,6 @@ describe('parseSignalingUrls', () => {
   });
 });
 
-describe('saved space', () => {
-  const config: SpaceConfig = { name: 'group', passphrase: 'secret words here', signaling: ['wss://a.example'] };
-
-  it('keeps the passphrase in session storage unless the user asks to remember it', () => {
-    const session = new MemoryStorage();
-    const local = new MemoryStorage();
-    saveSpace(config, false, session, local);
-    expect(local.length).toBe(0);
-    expect(loadSavedSpace(session, local)).toEqual(config);
-  });
-
-  it('moves the space to local storage when the user asks to remember it', () => {
-    const session = new MemoryStorage();
-    const local = new MemoryStorage();
-    saveSpace(config, false, session, local);
-    saveSpace(config, true, session, local);
-    expect(session.length).toBe(0);
-    expect(loadSavedSpace(session, local)).toEqual(config);
-  });
-
-  it('removes the space from both stores', () => {
-    const session = new MemoryStorage();
-    const local = new MemoryStorage();
-    saveSpace(config, true, session, local);
-    clearSavedSpace(session, local);
-    expect(loadSavedSpace(session, local)).toBeNull();
-  });
-
-  it('ignores damaged or wrong data', () => {
-    const session = new MemoryStorage();
-    const local = new MemoryStorage();
-    session.setItem('snj.space', '{not json');
-    local.setItem('snj.space', JSON.stringify({ name: 'x' }));
-    expect(loadSavedSpace(session, local)).toBeNull();
-  });
-});
-
 describe('passphrase', () => {
   it('makes the requested number of words from the list', () => {
     const words = generatePassphrase(6).split(' ');
@@ -139,8 +83,28 @@ describe('passphrase', () => {
     expect(generatePassphrase()).not.toBe(generatePassphrase());
   });
 
-  it('flags a short passphrase as weak', () => {
-    expect(isWeakPassphrase('short')).toBe(true);
-    expect(isWeakPassphrase(generatePassphrase())).toBe(false);
+  it('refuses a passphrase of fewer than 12 characters', () => {
+    expect(passphraseProblem('short')).toBe('short');
+    expect(passphraseProblem('  eleven char ')).toBe('short');
+  });
+
+  it('refuses a long passphrase that is easy to guess', () => {
+    expect(passphraseProblem('aaaaaaaaaaaaaaaa')).toBe('guessable');
+    expect(passphraseProblem('abababababababab')).toBe('guessable');
+    expect(passphraseProblem('MyPassword2026!!')).toBe('guessable');
+    expect(passphraseProblem('qwerty-keyboard-row')).toBe('guessable');
+  });
+
+  it('never refuses a passphrase that the generator can make', () => {
+    // One word of the generator list was also in the list of common strings.
+    // About 1 in 340 generated passphrases was then refused.
+    const filler = 'river tulip nine window orbit';
+    const refused = GENERATOR_WORDS.filter((word) => passphraseProblem(`${filler} ${word}`) !== null);
+    expect(refused).toEqual([]);
+  });
+
+  it('accepts a generated passphrase and a long mixed one', () => {
+    expect(passphraseProblem(generatePassphrase())).toBeNull();
+    expect(passphraseProblem('river tulip nine window')).toBeNull();
   });
 });

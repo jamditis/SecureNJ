@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Clock, Eye, MapPin, Settings, ShieldAlert, ShieldCheck, Siren, Trash2 } from 'lucide-react';
 import { alertState, confirmationKey, countConfirmations } from '../services/alerts';
 import { useLocale, useT } from '../services/i18n';
-import { ALERT_RETENTION, expiredIds } from '../services/retention';
+import { ALERT_RETENTION, deleteRecords, expiredIds } from '../services/retention';
 import { isConfirmation, isSighting, keyOfConfirmation, keyOfId } from '../services/schema';
 import { useRecords, useSharedSetting, useSync } from '../services/sync';
 import { timeAgo, useNow } from '../services/time';
@@ -37,14 +37,15 @@ export default function Sightings() {
   const remove = useCallback(
     (ids: string[]) => {
       doc.transact(() => {
-        ids.forEach((id) => map.delete(id));
+        // The marker keeps a deleted report deleted if a member changes it at the same time.
+        deleteRecords(doc, 'sightings', ids);
         // The map can hold a bad record from a peer, so check each value.
         confirmationMap.forEach((confirmation: unknown, key) => {
           if (isConfirmation(confirmation) && ids.includes(confirmation.sightingId)) confirmationMap.delete(key);
         });
       });
     },
-    [doc, map, confirmationMap],
+    [doc, confirmationMap],
   );
   // The data layer deletes expired reports. This filter hides them until it does.
   const sorted = useMemo(() => {

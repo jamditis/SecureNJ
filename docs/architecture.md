@@ -7,8 +7,9 @@ The app is a static site: React 19, TypeScript, Vite, Tailwind 4. There is no ba
 ```
 index.tsx
   SyncProvider            services/sync.tsx   opens the documents, owns the network
-    App                   App.tsx             navigation and the space dialog
-      one tool            components/*.tsx    reads and writes records
+    App                   App.tsx             navigation, addresses, and the page
+      RoomGate            components/RoomGate.tsx   the room of a shared tool
+        one tool          components/*.tsx    reads and writes records
 ```
 
 ## Layers
@@ -22,62 +23,85 @@ index.tsx
 
 ## Data
 
-Two Yjs documents are open at all times.
+Each shared tool has its own Yjs document. `ToolScope` (in `services/sync.tsx`) gives a tool its document through `SyncContext`, so a tool calls `useSync` and `useRecords` and does not know where its data comes from.
 
 | Document | Database name | Syncs | Holds |
 | --- | --- | --- | --- |
-| Shared | `snj-local` with no space, or the room ID in a space | Only in a space | Alerts, confirmations, check-ins, proposals, positions, strokes, posts, claims, shared settings |
+| Room of one tool | The room ID | Yes | The records of that tool |
+| Room of safety alerts | None: memory only | Yes | Alerts and confirmations |
+| Local | `snj-local` | Never | The records of each tool that the member uses with no room |
+| Local, memory only | None | Never | Local safety alerts. Gone after a reload. |
 | Private | `snj-private` | Never | Phone tree contacts |
+
+Tools that are not in "Work as a group" keep data in component state only, or save a locked file. The resource sheet keeps an optional draft in `localStorage`.
 
 Each tool stores records in a named `Y.Map`. A record is a plain object with an `id`. A write replaces the full record, so the last writer wins for that record. Where two members can act on one item at the same time, each action is its own record:
 
 - A position is stored with the key `proposalId:memberId`.
 - A confirmation of an alert is stored with the key `sightingId:memberId`.
+- A sign-up for a shift is stored with the key `shiftId:memberId`.
 - The claim state of a mutual aid post is stored in the map `claims` with the post ID as the key. An edit of the post and a claim by a different member then merge.
+- The quantity of a supply item is the sum of adjustment records, not a field.
 
-Shared settings (retention times) are in the map `settings`. They must be shared: an expired record is deleted for the full group, so all members must use the same time. A tool must not write such a setting on each keystroke: use an explicit save.
+Shared settings (retention times) are in the map `settings` of the document of the tool. They must be shared: an expired record is deleted for the full group, so all members must use the same time. A tool must not write such a setting on each keystroke: use an explicit save.
+
+The record types and guards of the first tools are in `types.ts` and `services/schema.ts`. A newer tool keeps its types and guards in its own service file (for example `services/shifts.ts`).
 
 ### Housekeeping
 
-`SyncProvider` runs housekeeping for the open documents every 30 seconds, for as long as the app is open (`startHousekeeping` in `services/sync.tsx`):
+Each open document gets housekeeping every 30 seconds, for as long as it is open (`startHousekeeping` in `services/sync.tsx`):
 
-1. `purgeExpired` (`services/retention.ts`) deletes expired alerts and posts, and the confirmations, claims, and positions whose parent record is gone. Tools also hide expired records, so the screen does not depend on the time of the next run.
-2. If the document changed, the browser database is rewritten to hold the current state only. The database is a log of changes. Without this step, the text of a deleted record stays in the log.
+1. `purgeExpired` (`services/retention.ts`) deletes expired alerts and posts, and the child records (confirmations, claims, positions, sign-ups, adjustments) whose parent record is gone. Tools also hide expired records, so the screen does not depend on the time of the next run.
+2. If the document changed and has a database, the database is rewritten to hold the current state only. The database is a log of changes. Without this step, the text of a deleted record stays in the log.
 
 ### Records from peers are not trusted
 
 `services/schema.ts` has a type guard and a key function for each record type. `useRecords` drops a record that fails its guard, and a record whose map key is not the key that its content gives (delete and update use that key, so such a record could not be removed). One bad record from one peer cannot stop a tool for the group.
 
-## Spaces and sync
+## Rooms and sync
 
-`services/space.ts` derives two values from the space name and the passphrase:
+`RoomGate` (in `components/RoomGate.tsx`) is the door of each shared tool. A member types the group name and the passphrase, or uses the tool on the device only.
 
-1. A master key: PBKDF2-SHA-256, 600,000 iterations. The salt contains the normalized space name.
+`services/space.ts` derives two values from the tool, the group name, and the passphrase:
+
+1. A master key: PBKDF2-SHA-256, 600,000 iterations. The salt contains the tool and the normalized group name, so each tool has its own room.
 2. From the master key, with HKDF and two labels: the room ID (public) and the room password (secret).
 
-`services/sync.tsx` opens a `WebrtcProvider` with these values. `y-webrtc` encrypts the signaling messages and the messages between browser tabs with a key from the room password. The WebRTC data channels are encrypted by WebRTC (DTLS).
+The passphrase goes to this derivation and is then dropped. Nothing stores the passphrase or the group name. The form of the next tool is filled with the group name and the servers from memory, and the member types the passphrase again.
+
+`openSession` opens a `WebrtcProvider` with these values. `y-webrtc` encrypts the signaling messages and the messages between browser tabs with a key from the room password. The WebRTC data channels are encrypted by WebRTC (DTLS).
 
 Presence (who is online) uses the Yjs awareness protocol. It is not written to the document.
 
-With no space, there is no `WebrtcProvider`. The app opens no network connection.
+A tool with no room has no `WebrtcProvider`. With no open room, the app opens no network connection.
 
 ## Identity
 
-Each browser makes a random member ID for each space on first use (`services/identity.ts`). It tells devices apart inside a space: one position for each member, no confirmation of your own report. It is not an account, and the IDs of one device in two spaces have no link. A member can set a display name. "Leave and delete" removes both.
+Each browser makes a random member ID for each room on first use (`services/identity.ts`). It tells devices apart inside a room: one position for each member, no confirmation of your own report. It is not an account, and the IDs of one device in two rooms have no link. The member ID of the alerts room is not saved: it is new at each visit. A member can set a display name.
 
-### Leave a space
+### Leave a room, erase the device
 
-`leave` closes the WebRTC provider and the connection to the signaling server, tells the other tabs of the browser to leave (a `BroadcastChannel`), and, if the user asks, deletes the space database. If a space cannot open, the provider forgets it and goes back to local mode, so that the app does not fail at each start.
+`closeRoom` closes the WebRTC provider and the connection to the signaling server, and tells the other tabs of the browser to leave that room (a `BroadcastChannel`). "Clear from this browser" also deletes the database of the room and its member ID. "Erase all data" (`services/wipe.ts`) removes the stored values, the databases, the offline copy, and the service worker of this app, in all tabs. It removes only names that this app or the earlier published site own, because other sites on the same origin share the storage.
+
+## Pages, sections, and addresses
+
+`tools.ts` lists the pages (start page, limits, resources, share), the four sections, and the tools. The address holds the page (`#/phone-tree`), so a link to a page works. The addresses are the same as on the earlier published site. `#/secure-share/<locked text>` opens a locked message.
+
+## Reference content
+
+`content/` holds text that people rely on and that must not change by accident: the rights card, the family plan prompts, the starter entries of the resource sheet, the resource links, and the hotline number. Each file was generated by a script from the published site, and a test pins a checksum of it. This content is in English only: the Spanish UI shows it in English with links to official Spanish materials.
 
 ## Encryption of exports
 
-`services/crypto.ts` has one cipher (AES-256-GCM) and one key derivation (PBKDF2-SHA-256, 600,000 iterations). The file header documents the byte formats. All version 2 passphrases go through `normalizePassphrase`. Version 1 text from the first release stays readable.
+`services/crypto.ts` has one cipher (AES-256-GCM) and one key derivation (PBKDF2-SHA-256, 600,000 iterations). The file header documents the byte formats. All new passphrases go through `normalizePassphrase` and `passphraseProblem`: the one encrypt function refuses a weak passphrase, so no tool can skip the rule. Text with no version prefix, from the published site or from the first release, stays readable.
+
+A locked file (`services/lockedFile.ts`) and the event page are HTML files that decrypt themselves, built in the same way.
 
 The event page (`services/eventExport.ts`) is one HTML file with the encrypted event and an inline script that decrypts it. That script must match the version 2 text format. A test opens the page in a DOM and decrypts it, and the end-to-end test opens the real file in a browser with no network.
 
 ## Text and languages
 
-`locales/en.ts` holds all text. `MessageKey` is the type of its keys, so a missing key is a compile error. To add a language, add a file with the same keys and supply it through `I18nContext`.
+`locales/en/` holds all English text, one file for each area, and `locales/es/` has a file with the same name and the same keys. `MessageKey` is the type of the English keys, so a missing key in code or in Spanish is a compile error. `I18nProvider` saves the choice of language. To add a language, add a folder and add it to `LOCALES` in `services/i18n.ts`.
 
 ## Build
 
