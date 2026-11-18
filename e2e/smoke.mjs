@@ -133,8 +133,10 @@ async function main() {
     assert.equal(await solo.evaluate(() => document.documentElement.lang), 'es');
     await solo.reload();
     await solo.getByRole('navigation').getByRole('button', { name: 'Alertas de seguridad' }).waitFor();
+    // The address keeps the page, so a reload opens the same tool.
+    await solo.getByRole('heading', { name: 'Alertas de seguridad', level: 2 }).waitFor();
     await solo.getByLabel('Idioma').selectOption('en');
-    await solo.getByRole('heading', { name: 'Tools for local resilience' }).waitFor();
+    await solo.getByRole('heading', { name: 'Safety alerts', level: 2 }).waitFor();
 
     console.log('1d. "Erase all data" removes the data, the offline copy, and the service worker');
     // A different site on the same web origin has its own data. The erase must not touch it.
@@ -195,7 +197,7 @@ async function main() {
 
     console.log('4. A member with the wrong passphrase gets a different, empty space');
     const eve = await openMember(browser, appUrl, 'eve');
-    await joinSpace(eve, 'a wrong passphrase for this space');
+    await joinSpace(eve, 'a wrong set of words for this space');
     await openTool(eve, 'Safety alerts');
     await eve.waitForTimeout(5_000);
     assert.equal(await eve.getByText('Broad St and Market St').count(), 0, 'a wrong passphrase must not show the data');
@@ -216,7 +218,7 @@ async function main() {
     await ana.getByLabel('Event title').fill('Know your rights night');
     await ana.getByLabel('Date and time').fill('Tuesday, 6 PM');
     await ana.getByLabel('Location').fill('Library, room 2');
-    await ana.locator('form input[type=password]').fill('event passphrase for smoke');
+    await ana.locator('form input[type=password]').fill('river tulip nine window');
     const [download] = await Promise.all([
       ana.waitForEvent('download'),
       ana.getByRole('button', { name: 'Save the encrypted page' }).click(),
@@ -233,7 +235,7 @@ async function main() {
       if (message.type() === 'error') problems.push(`viewer console: ${message.text()}`);
     });
     await viewer.goto(pathToFileURL(exportedPath).href);
-    await viewer.getByPlaceholder('Passphrase').fill('event passphrase for smoke');
+    await viewer.getByPlaceholder('Passphrase').fill('river tulip nine window');
     await viewer.getByRole('button', { name: 'Unlock' }).click();
     await viewer.getByRole('heading', { name: 'Know your rights night' }).waitFor({ timeout: 15_000 });
 

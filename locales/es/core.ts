@@ -18,7 +18,8 @@ const core: Record<keyof typeof en, string> = {
   'passphrase.show': 'Mostrar la frase de contraseña',
   'passphrase.hide': 'Ocultar la frase de contraseña',
   'passphrase.generate': 'Crear una frase de contraseña al azar',
-  'passphrase.weak': 'Esta frase de contraseña es corta. Una frase de contraseña corta es fácil de adivinar con muchos intentos. Usa el botón del dado para crear una fuerte.',
+  'passphrase.problem.short': 'Usa una frase de contraseña de al menos 12 caracteres.',
+  'passphrase.problem.guessable': 'Esa frase de contraseña es fácil de adivinar. Usa el botón del dado para crear una más fuerte.',
 
   'nav.label': 'Herramientas',
   'nav.menu': 'Menú',

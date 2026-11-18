@@ -4,6 +4,7 @@ import { encryptText } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { buildEventPage } from '../services/eventExport';
 import { useT } from '../services/i18n';
+import { passphraseProblem } from '../services/passphrase';
 import type { EventDetails } from '../types';
 import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
 
@@ -76,7 +77,7 @@ export default function EventCreator() {
           <Field label={t('passphrase.label')}>
             <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate />
           </Field>
-          <Button type="submit" className="w-full" disabled={busy || passphrase === ''}>
+          <Button type="submit" className="w-full" disabled={busy || passphraseProblem(passphrase) !== null}>
             <Download className="w-5 h-5" aria-hidden="true" /> {busy ? t('common.working') : t('event.generate')}
           </Button>
           {message && <Notice tone={message.tone}>{message.text}</Notice>}

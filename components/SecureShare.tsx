@@ -10,6 +10,7 @@ import {
 } from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { useT } from '../services/i18n';
+import { passphraseProblem } from '../services/passphrase';
 import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
 
 type Mode = 'encrypt' | 'decrypt';
@@ -34,7 +35,13 @@ function Tabs<T extends string>({ options, value, onChange, label }: { options: 
   );
 }
 
-export default function SecureShare() {
+interface SecureShareProps {
+  /** Locked text from a link of the form "#/secure-share/<locked text>". */
+  lockedFromLink?: string;
+}
+
+export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
+  void lockedFromLink;
   const t = useT();
   const [mode, setMode] = useState<Mode>('encrypt');
   const [kind, setKind] = useState<Kind>('text');
@@ -127,7 +134,7 @@ export default function SecureShare() {
             <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate={mode === 'encrypt'} />
           </Field>
 
-          <Button type="submit" variant={mode === 'encrypt' ? 'primary' : 'dark'} className="w-full" disabled={busy || !hasInput || passphrase === ''}>
+          <Button type="submit" variant={mode === 'encrypt' ? 'primary' : 'dark'} className="w-full" disabled={busy || !hasInput || passphrase === '' || (mode === 'encrypt' && passphraseProblem(passphrase) !== null)}>
             {mode === 'encrypt' ? <Lock className="w-4 h-4" aria-hidden="true" /> : <Unlock className="w-4 h-4" aria-hidden="true" />}
             {busy ? t('common.working') : t(`share.mode.${mode}`)}
           </Button>

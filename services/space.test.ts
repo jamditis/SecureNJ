@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generatePassphrase, isWeakPassphrase } from './passphrase';
+import { generatePassphrase, passphraseProblem } from './passphrase';
 import {
   clearSavedSpace,
   deriveSpaceKeys,
@@ -139,8 +139,20 @@ describe('passphrase', () => {
     expect(generatePassphrase()).not.toBe(generatePassphrase());
   });
 
-  it('flags a short passphrase as weak', () => {
-    expect(isWeakPassphrase('short')).toBe(true);
-    expect(isWeakPassphrase(generatePassphrase())).toBe(false);
+  it('refuses a passphrase of fewer than 12 characters', () => {
+    expect(passphraseProblem('short')).toBe('short');
+    expect(passphraseProblem('  eleven char ')).toBe('short');
+  });
+
+  it('refuses a long passphrase that is easy to guess', () => {
+    expect(passphraseProblem('aaaaaaaaaaaaaaaa')).toBe('guessable');
+    expect(passphraseProblem('abababababababab')).toBe('guessable');
+    expect(passphraseProblem('MyPassword2026!!')).toBe('guessable');
+    expect(passphraseProblem('qwerty-keyboard-row')).toBe('guessable');
+  });
+
+  it('accepts a generated passphrase and a long mixed one', () => {
+    expect(passphraseProblem(generatePassphrase())).toBeNull();
+    expect(passphraseProblem('river tulip nine window')).toBeNull();
   });
 });

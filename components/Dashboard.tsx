@@ -18,7 +18,7 @@ import { needsAttention } from '../services/status';
 import { countLow, isSupplyAdjustment, isSupplyItem } from '../services/supplies';
 import { useRecords, useSync } from '../services/sync';
 import { useNow } from '../services/time';
-import { TOOLS } from '../tools';
+import { SECTIONS, TOOLS } from '../tools';
 import type { ToolId } from '../types';
 import { Button } from './ui';
 
@@ -77,31 +77,36 @@ export default function Dashboard({ onSelectTool, onOpenSpace }: DashboardProps)
         </Button>
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {TOOLS.map((tool) => (
-          <button
-            key={tool.id}
-            type="button"
-            onClick={() => onSelectTool(tool.id)}
-            className="group flex flex-col p-6 bg-white border border-slate-200 rounded-3xl text-left transition-shadow hover:shadow-xl hover:border-emerald-500/40"
-          >
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className={`${tool.color} w-12 h-12 rounded-2xl flex items-center justify-center text-white`}>
-                <tool.icon className="w-6 h-6" aria-hidden="true" />
-              </div>
-              {activity[tool.id] && <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">{activity[tool.id]}</span>}
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-1">{t(tool.title)}</h3>
-            <p className="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">{t(tool.description)}</p>
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-              <span>{tool.scope === 'shared' ? t('dashboard.scopeShared') : t('dashboard.scopeDevice')}</span>
-              <span className="flex items-center gap-1 group-hover:text-emerald-600">
-                {t('dashboard.open')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
+      {SECTIONS.map((section) => (
+        <section key={section.id} className="space-y-4">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">{t(section.title)}</h3>
+            <p className="text-slate-600">{t(section.intro)}</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {TOOLS.filter((tool) => tool.section === section.id).map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                onClick={() => onSelectTool(tool.id)}
+                className="group flex items-start gap-4 p-5 bg-white border border-slate-200 rounded-2xl text-left transition-shadow hover:shadow-lg hover:border-emerald-500/40"
+              >
+                <div className={`${tool.color} w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0`}>
+                  <tool.icon className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
+                    {t(tool.title)}
+                    {activity[tool.id] && <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{activity[tool.id]}</span>}
+                  </h4>
+                  <p className="text-slate-600 text-sm leading-relaxed">{t(tool.description)}</p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 shrink-0 mt-1" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
 
       <section className="bg-slate-900 rounded-3xl p-8 text-white grid grid-cols-1 md:grid-cols-3 gap-8">
         {(

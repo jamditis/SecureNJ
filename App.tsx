@@ -1,12 +1,19 @@
-import { useState, type ComponentType } from 'react';
-import { Database, HardDrive, Languages, LayoutDashboard, Menu, Shield, Users, X } from 'lucide-react';
+import { useEffect, useState, type ComponentType } from 'react';
+import { Database, HardDrive, Languages, Menu, Shield, Users, X } from 'lucide-react';
 import ConsensusBuilder from './components/ConsensusBuilder';
 import Dashboard from './components/Dashboard';
 import DeviceDialog from './components/DeviceDialog';
 import EventCreator from './components/EventCreator';
+import FamilyPlan from './components/FamilyPlan';
+import LimitsPage from './components/LimitsPage';
 import MutualAid from './components/MutualAid';
 import PhoneTree from './components/PhoneTree';
+import PhotoCleaner from './components/PhotoCleaner';
+import ResourceSheet from './components/ResourceSheet';
+import ResourcesPage from './components/ResourcesPage';
+import RightsCard from './components/RightsCard';
 import SecureShare from './components/SecureShare';
+import SharePage from './components/SharePage';
 import ShiftRoster from './components/ShiftRoster';
 import Sightings from './components/Sightings';
 import SpaceDialog from './components/SpaceDialog';
@@ -14,23 +21,31 @@ import StatusBoard from './components/StatusBoard';
 import SupplyInventory from './components/SupplyInventory';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
 import { Notice } from './components/ui';
+import WitnessNotes from './components/WitnessNotes';
 import { LOCALES, useI18n, type Locale } from './services/i18n';
 import { readInvite } from './services/invite';
 import { useSync } from './services/sync';
-import { TOOLS, type ToolInfo } from './tools';
+import { PAGES, SECTIONS, TOOLS, goToPage, readRoute } from './tools';
 import type { ToolId } from './types';
 
-const VIEWS: Record<ToolInfo['id'], ComponentType> = {
+const VIEWS: Record<Exclude<ToolId, 'dashboard' | 'secure-share'>, ComponentType> = {
+  limits: LimitsPage,
+  resources: ResourcesPage,
+  share: SharePage,
+  'event-creator': EventCreator,
+  'rights-card': RightsCard,
+  'family-plan': FamilyPlan,
+  'phone-tree': PhoneTree,
+  'witness-notes': WitnessNotes,
+  'photo-cleaner': PhotoCleaner,
+  'resource-sheet': ResourceSheet,
   'safety-alerts': Sightings,
   'status-board': StatusBoard,
+  'mutual-aid': MutualAid,
   consensus: ConsensusBuilder,
   whiteboard: TacticalWhiteboard,
-  'mutual-aid': MutualAid,
   'shift-roster': ShiftRoster,
   'supply-inventory': SupplyInventory,
-  'event-creator': EventCreator,
-  'phone-tree': PhoneTree,
-  'secure-share': SecureShare,
 };
 
 export default function App() {
@@ -40,18 +55,43 @@ export default function App() {
   // address, so that it is not in the history or in a copied address.
   const [invite] = useState(() => {
     const found = readInvite(window.location.hash, window.location.protocol === 'https:');
-    if (found) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (found) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/dashboard`);
     return found;
   });
-  const [activeTool, setActiveTool] = useState<ToolId>('dashboard');
+  // The address holds the page, for example "#/phone-tree". A link to a page
+  // then works, and so does the back button of the browser.
+  const [route, setRoute] = useState(() => readRoute(window.location.hash));
+  const activeTool = route.page;
+  const setActiveTool = goToPage;
+  useEffect(() => {
+    const onHashChange = () => {
+      setRoute(readRoute(window.location.hash));
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSpaceOpen, setIsSpaceOpen] = useState(invite !== null && space === null);
   const [isDeviceOpen, setIsDeviceOpen] = useState(false);
 
-  const navItems = [{ id: 'dashboard' as ToolId, label: t('nav.overview'), icon: LayoutDashboard }].concat(
-    TOOLS.map((tool) => ({ id: tool.id, label: t(tool.title), icon: tool.icon })),
+  const navButton = (id: ToolId, label: string, Icon: ComponentType<{ className?: string }>) => (
+    <li key={id}>
+      <button
+        type="button"
+        aria-current={activeTool === id ? 'page' : undefined}
+        onClick={() => {
+          setActiveTool(id);
+          setIsSidebarOpen(false);
+        }}
+        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors border ${activeTool === id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-transparent hover:bg-slate-800 hover:text-white'}`}
+      >
+        <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+        {label}
+      </button>
+    </li>
   );
-  const ActiveView = activeTool === 'dashboard' ? null : VIEWS[activeTool];
+  const ActiveView = activeTool === 'dashboard' || activeTool === 'secure-share' ? null : VIEWS[activeTool];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -77,24 +117,15 @@ export default function App() {
             <h1 className="text-xl font-bold text-white tracking-tight">{t('app.name')}</h1>
           </div>
 
-          <ul className="space-y-1">
-            {navItems.map(({ id, label, icon: Icon }) => (
-              <li key={id}>
-                <button
-                  type="button"
-                  aria-current={activeTool === id ? 'page' : undefined}
-                  onClick={() => {
-                    setActiveTool(id);
-                    setIsSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-colors border ${activeTool === id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-transparent hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
-                  {label}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ul className="space-y-1">{PAGES.map((page) => navButton(page.id, t(page.title), page.icon))}</ul>
+          {SECTIONS.map((section) => (
+            <div key={section.id}>
+              <h2 className="px-4 mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">{t(section.title)}</h2>
+              <ul className="space-y-1">
+                {TOOLS.filter((tool) => tool.section === section.id).map((tool) => navButton(tool.id, t(tool.title), tool.icon))}
+              </ul>
+            </div>
+          ))}
 
           <div className="mt-auto space-y-3">
             <button
@@ -138,7 +169,13 @@ export default function App() {
       <main className="flex-1 min-w-0 p-4 md:p-10 lg:p-16">
         <div className="max-w-5xl mx-auto space-y-6">
           {spaceFailed && <Notice tone="error">{t('sync.spaceFailed')}</Notice>}
-          {ActiveView ? <ActiveView /> : <Dashboard onSelectTool={setActiveTool} onOpenSpace={() => setIsSpaceOpen(true)} />}
+          {activeTool === 'secure-share' ? (
+            <SecureShare key={route.payload} lockedFromLink={route.payload} />
+          ) : ActiveView ? (
+            <ActiveView />
+          ) : (
+            <Dashboard onSelectTool={setActiveTool} onOpenSpace={() => setIsSpaceOpen(true)} />
+          )}
         </div>
       </main>
 

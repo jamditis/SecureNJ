@@ -19,7 +19,8 @@ const core = {
   'passphrase.show': 'Show the passphrase',
   'passphrase.hide': 'Hide the passphrase',
   'passphrase.generate': 'Make a random passphrase',
-  'passphrase.weak': 'This passphrase is short. A short passphrase is easy to find by trial. Use the dice button to make a strong one.',
+  'passphrase.problem.short': 'Use a passphrase of at least 12 characters.',
+  'passphrase.problem.guessable': 'That passphrase is easy to guess. Use the dice button to make a stronger one.',
 
   'nav.label': 'Tools',
   'nav.menu': 'Menu',

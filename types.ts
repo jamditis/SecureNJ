@@ -1,5 +1,14 @@
+/** Each page of the app: the start page, the three information pages, and the tools. */
 export type ToolId =
   | 'dashboard'
+  | 'limits'
+  | 'resources'
+  | 'share'
+  | 'rights-card'
+  | 'family-plan'
+  | 'witness-notes'
+  | 'photo-cleaner'
+  | 'resource-sheet'
   | 'safety-alerts'
   | 'status-board'
   | 'consensus'

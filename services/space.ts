@@ -3,7 +3,8 @@
  * passphrase. All room identifiers come from these two values, so a person
  * who does not have the passphrase cannot find the room or read its messages.
  */
-import { KDF_ITERATIONS, normalizePassphrase } from './crypto';
+import { KDF_ITERATIONS } from './crypto';
+import { normalizePassphrase } from './passphrase';
 
 export interface SpaceConfig {
   name: string;

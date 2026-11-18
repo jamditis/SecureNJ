@@ -6,7 +6,7 @@ import { pickLocale } from './i18n';
 import { makeInviteLink, readInvite } from './invite';
 import { MAX_SPACE_NAME_LENGTH } from './space';
 
-const PASSPHRASE = 'backup passphrase for tests';
+const PASSPHRASE = 'river tulip nine window';
 
 describe('backup', () => {
   const makeSpace = () => {
