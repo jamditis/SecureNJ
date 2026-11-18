@@ -6,6 +6,7 @@ import { base64ToBytes, bytesToBase64, decryptBytes, encryptBytes, encryptText }
 import { downloadBlob } from '../services/download';
 import { I18nContext, i18nFor } from '../services/i18n';
 import { packFile } from '../services/lockedFile';
+import EventCreator from './EventCreator';
 import LockFile from './LockFile';
 import SecureShare from './SecureShare';
 
@@ -350,5 +351,34 @@ describe('lock a file', () => {
     await lockNotes(user);
     await user.upload(fileInput(), new File(['x'], 'other.txt'));
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('event page', () => {
+  const saved = vi.mocked(downloadBlob);
+  beforeEach(() => saved.mockClear());
+
+  // These selectors do not use text, so the test does not depend on how much of each language file is done.
+  it.each([
+    ['en', '<html lang="en" dir="ltr">'],
+    ['pt', '<html lang="pt-BR" dir="ltr">'],
+    ['ar', '<html lang="ar" dir="rtl">'],
+  ] as const)('gives the event page the language tag and the direction of %s', async (locale, start) => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <I18nContext.Provider value={i18nFor(locale)}>
+        <EventCreator />
+      </I18nContext.Provider>,
+    );
+    for (const input of container.querySelectorAll<HTMLInputElement>('input[required]')) {
+      await user.click(input);
+      await user.paste('Library');
+    }
+    await user.click(container.querySelector<HTMLInputElement>('input[type="password"]')!);
+    await user.paste(PASSPHRASE);
+    await user.click(container.querySelector<HTMLButtonElement>('button[type="submit"]')!);
+    await waitFor(() => expect(saved).toHaveBeenCalled(), WAIT);
+    const html = await saved.mock.calls[0][0].text();
+    expect(html).toContain(start);
   });
 });
