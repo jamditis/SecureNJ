@@ -47,7 +47,9 @@ export default defineConfig(({ mode }) => {
   return {
     // A relative base lets a group host the build in any folder.
     base: './',
-    server: { port: 3000 },
+    // The dev server listens on this computer only. VITE_DEV_HOST opens it to
+    // the local network, for a test on a phone.
+    server: { port: 3000, host: env.VITE_DEV_HOST || '127.0.0.1' },
     plugins: [react(), tailwindcss(), htmlMeta(env.VITE_SITE_URL ?? '')],
     test: {
       environment: 'node',
