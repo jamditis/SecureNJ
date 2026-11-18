@@ -1,250 +1,156 @@
+import { useMemo, useState } from 'react';
+import { AlertCircle, Clock, LogOut, Navigation, Pencil, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { useLocale, useT } from '../services/i18n';
+import { isStatusUser, keyOfId } from '../services/schema';
+import { KEEP_CHECK_IN, isOverdue, makeStatusUpdate, sortForBoard } from '../services/status';
+import { useOnlineMembers, useRecords, useSync } from '../services/sync';
+import { timeAgo, useNow } from '../services/time';
+import type { MemberStatus, StatusUser } from '../types';
+import { EmptyState, Field, IconButton, ToolHeader, inputClass } from './ui';
 
-import React, { useState, useEffect, useRef } from 'react';
-import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
-import { IndexeddbPersistence } from 'y-indexeddb';
-import { 
-  Wifi, 
-  WifiOff, 
-  UserCheck, 
-  AlertCircle, 
-  Navigation, 
-  ShieldCheck, 
-  HelpCircle,
-  RefreshCw,
-  Edit3
-} from 'lucide-react';
-import { StatusUser } from '../types';
+const STATUSES: MemberStatus[] = ['safe', 'transit', 'support', 'detained'];
+const CHECK_IN_MINUTES = [0, 15, 30, 60, 120];
 
-const ROOM_NAME = 'status-board-v1';
+const STATUS_STYLE: Record<MemberStatus, { color: string; icon: LucideIcon }> = {
+  safe: { color: 'bg-emerald-500', icon: ShieldCheck },
+  transit: { color: 'bg-yellow-500', icon: Navigation },
+  support: { color: 'bg-orange-500', icon: AlertCircle },
+  detained: { color: 'bg-red-600', icon: ShieldAlert },
+};
 
-const StatusBoard: React.FC = () => {
-  const [users, setUsers] = useState<StatusUser[]>([]);
-  const [myStatus, setMyStatus] = useState<StatusUser | null>(null);
-  const [peers, setPeers] = useState(0);
+const clock = (time: number, locale: string) => new Date(time).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+
+export default function StatusBoard() {
+  const t = useT();
+  const locale = useLocale();
+  const now = useNow(15_000);
+  const { memberId, memberName, setMemberName } = useSync();
+  const { records: users, map } = useRecords('users', isStatusUser, keyOfId);
+  const online = useOnlineMembers();
+  const me = users.find((user) => user.id === memberId);
   const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(memberName);
+  const [note, setNote] = useState(me?.note ?? '');
+  // An edit of the note must not cancel a check-in time that is set.
+  const [checkInMinutes, setCheckInMinutes] = useState(me?.checkInBy ? KEEP_CHECK_IN : 0);
 
-  // Use local storage to remember who "I" am across reloads
-  const [myId] = useState(() => {
-    let id = localStorage.getItem('status_user_id');
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem('status_user_id', id);
-    }
-    return id;
-  });
+  const others = useMemo(() => sortForBoard(users.filter((user) => user.id !== memberId), now), [users, memberId, now]);
 
-  const [myName, setMyName] = useState(() => localStorage.getItem('status_user_name') || 'Anonymous');
-
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const usersMapRef = useRef<Y.Map<StatusUser> | null>(null);
-
-  useEffect(() => {
-    const ydoc = new Y.Doc();
-    const usersMap = ydoc.getMap<StatusUser>('users');
-    
-    ydocRef.current = ydoc;
-    usersMapRef.current = usersMap;
-
-    const indexeddbProvider = new IndexeddbPersistence(ROOM_NAME, ydoc);
-    const webrtcProvider = new WebrtcProvider(ROOM_NAME, ydoc, {
-      signaling: ['wss://signaling.yjs.dev', 'wss://y-webrtc-signaling-eu.herokuapp.com']
-    });
-
-    webrtcProvider.on('peers', ({ webrtcPeers }: any) => {
-      setPeers(webrtcPeers.size);
-    });
-
-    const updateState = () => {
-      const allUsers = Array.from(usersMap.values()) as StatusUser[];
-      setUsers(allUsers.sort((a, b) => a.name.localeCompare(b.name)));
-      
-      const me = allUsers.find(u => u.id === myId);
-      if (me) setMyStatus(me);
-    };
-
-    usersMap.observe(updateState);
-    updateState();
-
-    // Heartbeat: Update my timestamp every 60s if I exist
-    const interval = setInterval(() => {
-        if (usersMap.has(myId)) {
-            const current = usersMap.get(myId);
-            if (current) {
-                usersMap.set(myId, { ...current, lastUpdated: Date.now() });
-            }
-        }
-    }, 60000);
-
-    return () => {
-      clearInterval(interval);
-      webrtcProvider.destroy();
-      indexeddbProvider.destroy();
-      ydoc.destroy();
-    };
-  }, [myId]);
-
-  const updateStatus = (status: StatusUser['status']) => {
-    if (!usersMapRef.current) return;
-    const user: StatusUser = {
-        id: myId,
-        name: myName,
-        status,
-        lastUpdated: Date.now(),
-        note: ''
-    };
-    usersMapRef.current.set(myId, user);
-    localStorage.setItem('status_user_name', myName);
+  const update = (status: MemberStatus) => {
+    setMemberName(name);
+    map.set(memberId, makeStatusUpdate({ id: memberId, name, status, note, checkInMinutes, current: me }));
     setIsEditing(false);
   };
 
-  const timeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    return `${Math.floor(minutes / 60)}h ago`;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch(status) {
-        case 'safe': return 'bg-emerald-500';
-        case 'transit': return 'bg-yellow-500';
-        case 'support': return 'bg-orange-500';
-        case 'arrested': return 'bg-red-600';
-        default: return 'bg-slate-300';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch(status) {
-        case 'safe': return ShieldCheck;
-        case 'transit': return Navigation;
-        case 'support': return AlertCircle;
-        case 'arrested': return HelpCircle; // Euphemism
-        default: return WifiOff;
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-      switch(status) {
-          case 'safe': return 'Safe / Clear';
-          case 'transit': return 'In Transit';
-          case 'support': return 'Need Support';
-          case 'arrested': return 'Detained';
-          case 'offline': return 'Offline';
-          default: return 'Unknown';
-      }
-  };
+  const displayName = (user: StatusUser) => user.name || t('common.anonymous');
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            Group check-in
-            {peers > 0 ? (
-              <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <Wifi className="w-3 h-3" /> Live ({peers})
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                <WifiOff className="w-3 h-3" /> Offline
-              </span>
-            )}
-          </h2>
-          <p className="text-slate-500">Signal your safety status to your affinity group.</p>
-        </div>
-      </div>
+      <ToolHeader title={t('status.title')} subtitle={t('status.subtitle')} />
 
-      {/* My Status Card */}
-      <div className="bg-slate-900 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl">
-        <div className="relative z-10">
-            <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4">My Current Status</h3>
-            
-            {!myStatus || isEditing ? (
-                <div className="space-y-4 max-w-md">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">My Codename</label>
-                        <input 
-                            type="text" 
-                            value={myName}
-                            onChange={(e) => setMyName(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl mt-1 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                            placeholder="e.g. Red Sparrow"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        {['safe', 'transit', 'support', 'arrested'].map(s => (
-                             <button
-                                key={s}
-                                onClick={() => updateStatus(s as any)}
-                                className="p-3 rounded-xl border border-slate-700 hover:bg-slate-800 flex items-center gap-2 font-bold text-sm capitalize transition-colors"
-                             >
-                                <div className={`w-3 h-3 rounded-full ${getStatusColor(s)}`} />
-                                {getStatusLabel(s)}
-                             </button>
-                        ))}
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <div className={`w-20 h-20 rounded-2xl ${getStatusColor(myStatus.status)} flex items-center justify-center shadow-lg`}>
-                             {React.createElement(getStatusIcon(myStatus.status), { className: "w-10 h-10 text-white" })}
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-bold">{myStatus.name}</h2>
-                            <p className="text-emerald-400 font-medium flex items-center gap-2 mt-1">
-                                {getStatusLabel(myStatus.status)}
-                                <span className="text-slate-500 text-xs">• {timeAgo(myStatus.lastUpdated)}</span>
-                            </p>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={() => setIsEditing(true)}
-                        className="bg-slate-800 hover:bg-slate-700 p-3 rounded-xl transition-colors"
-                    >
-                        <Edit3 className="w-5 h-5" />
-                    </button>
-                </div>
-            )}
-        </div>
-      </div>
-
-      {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {users.filter(u => u.id !== myId).length === 0 ? (
-            <div className="col-span-full py-12 text-center text-slate-400 italic">
-                Waiting for peers to join...
+      <section className="bg-slate-900 rounded-3xl p-6 md:p-8 text-white space-y-4">
+        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs">{t('status.mine')}</h3>
+        {!me || isEditing ? (
+          <div className="space-y-4 max-w-md">
+            <Field label={t('status.name')}>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('status.nameHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
+            </Field>
+            <Field label={t('status.note')}>
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('status.noteHint')} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`} />
+            </Field>
+            <Field label={t('status.checkIn')}>
+              <select value={checkInMinutes} onChange={(e) => setCheckInMinutes(Number(e.target.value))} className={`${inputClass} !bg-slate-800 !border-slate-700 text-white`}>
+                {me && me.checkInBy !== null && <option value={KEEP_CHECK_IN}>{t('status.checkInKeep', { time: clock(me.checkInBy, locale) })}</option>}
+                {CHECK_IN_MINUTES.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes === 0 ? t('status.checkInNone') : t('status.checkInOption', { minutes })}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              {STATUSES.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => update(status)}
+                  className="p-3 rounded-xl border border-slate-700 hover:bg-slate-800 flex items-center gap-2 font-bold text-sm transition-colors"
+                >
+                  <span className={`w-3 h-3 rounded-full ${STATUS_STYLE[status].color}`} aria-hidden="true" />
+                  {t(`status.option.${status}`)}
+                </button>
+              ))}
             </div>
+          </div>
         ) : (
-            users.filter(u => u.id !== myId).map(user => {
-                const Icon = getStatusIcon(user.status);
-                // Check if stale (older than 5 mins)
-                const isStale = Date.now() - user.lastUpdated > 5 * 60 * 1000;
+          <div className="flex items-center justify-between gap-4">
+            <MemberSummary user={me} name={displayName(me)} now={now} locale={locale} dark />
+            <div className="flex gap-1">
+              <IconButton icon={Pencil} label={t('status.change')} className="hover:!bg-slate-800 hover:!text-white" onClick={() => {
+                  setCheckInMinutes(me.checkInBy !== null ? KEEP_CHECK_IN : 0);
+                  setNote(me.note);
+                  setIsEditing(true);
+                }}
+              />
+              <IconButton icon={LogOut} label={t('status.leave')} className="hover:!bg-slate-800 hover:!text-white" onClick={() => map.delete(memberId)} />
+            </div>
+          </div>
+        )}
+      </section>
 
-                return (
-                    <div key={user.id} className={`p-4 rounded-2xl border ${isStale ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200'} flex items-center gap-4`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isStale ? 'bg-slate-200' : getStatusColor(user.status)}`}>
-                            <Icon className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-slate-900 truncate">{user.name}</h4>
-                            <div className="flex items-center gap-2 text-xs">
-                                <span className={`font-bold ${isStale ? 'text-slate-400' : 'text-slate-600'}`}>
-                                    {isStale ? 'Offline?' : getStatusLabel(user.status)}
-                                </span>
-                                <span className="text-slate-400">• {timeAgo(user.lastUpdated)}</span>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {others.length === 0 ? (
+          <EmptyState icon={Users} title={t('status.empty')} />
+        ) : (
+          others.map((user) => (
+            <div key={user.id} className={`p-4 rounded-2xl border bg-white ${isOverdue(user, now) ? 'border-red-400' : 'border-slate-200'}`}>
+              <MemberSummary user={user} name={displayName(user)} now={now} locale={locale} />
+              <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${online.has(user.id) ? 'bg-emerald-500' : 'bg-slate-300'}`} aria-hidden="true" />
+                {online.has(user.id) ? t('status.online') : t('status.offline')}
+              </p>
+            </div>
+          ))
         )}
       </div>
     </div>
   );
-};
+}
 
-export default StatusBoard;
+interface MemberSummaryProps {
+  user: StatusUser;
+  name: string;
+  now: number;
+  locale: string;
+  dark?: boolean;
+}
+
+function MemberSummary({ user, name, now, locale, dark = false }: MemberSummaryProps) {
+  const t = useT();
+  const { color, icon: Icon } = STATUS_STYLE[user.status];
+  const overdue = isOverdue(user, now);
+  return (
+    <div className="flex items-center gap-4 min-w-0">
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="w-6 h-6 text-white" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <h4 className={`font-bold truncate ${dark ? 'text-white text-xl' : 'text-slate-900'}`}>{name}</h4>
+        <p className={`text-xs font-bold ${dark ? 'text-emerald-400' : 'text-slate-600'}`}>
+          {t(`status.option.${user.status}`)} <span className="font-normal text-slate-400">· {timeAgo(user.lastUpdated, now, locale)}</span>
+        </p>
+        {user.note && <p className={`text-xs break-words ${dark ? 'text-slate-300' : 'text-slate-500'}`}>{user.note}</p>}
+        {overdue && (
+          <p className="text-xs font-bold text-red-500 flex items-center gap-1">
+            <Clock className="w-3 h-3" aria-hidden="true" /> {t('status.overdue')}
+          </p>
+        )}
+        {!overdue && user.checkInBy !== null && (
+          <p className="text-xs text-slate-400">
+            {t('status.nextCheckIn', { time: clock(user.checkInBy, locale) })}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

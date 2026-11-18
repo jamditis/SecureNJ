@@ -1,25 +1,50 @@
 {
-  "name": "local-resilience-toolkit",
+  "name": "securenj",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "node e2e/smoke.mjs",
+    "signaling": "y-webrtc-signaling",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e"
   },
   "dependencies": {
+    "@scure/bip39": "^2.4.0",
+    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "lucide-react": "^0.562.0",
-    "yjs": "13.6.10",
+    "y-indexeddb": "9.0.12",
+    "y-protocols": "^1.0.7",
     "y-webrtc": "10.3.0",
-    "y-indexeddb": "9.0.12"
+    "yjs": "13.6.10"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.12",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.8",
+    "jsdom": "^31.0.1",
+    "playwright": "1.63.0",
+    "tailwindcss": "^4.3.5",
     "typescript": "~5.8.2",
-    "vite": "^6.4.6"
+    "typescript-eslint": "^8.73.0",
+    "vite": "^6.4.6",
+    "vitest": "^5.1.1",
+    "ws": "^8.23.0"
   }
 }

@@ -1,145 +1,155 @@
+import { useState, type FormEvent } from 'react';
+import { Check, Copy, Lock, Unlock } from 'lucide-react';
+import {
+  MAX_CONTAINER_BYTES,
+  MAX_FILE_BYTES,
+  decryptFile,
+  decryptText,
+  encryptFile,
+  encryptText,
+} from '../services/crypto';
+import { downloadBlob } from '../services/download';
+import { useT } from '../services/i18n';
+import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
 
-import React, { useState } from 'react';
-import { FileLock, Lock, Unlock, Copy, Check, FileText } from 'lucide-react';
-import { encryptData, decryptData } from '../services/crypto';
+type Mode = 'encrypt' | 'decrypt';
+type Kind = 'text' | 'file';
+const ENCRYPTED_FILE_NAME = 'encrypted-file.snj';
 
-const SecureShare: React.FC = () => {
-  const [mode, setMode] = useState<'encrypt' | 'decrypt'>('encrypt');
-  const [input, setInput] = useState('');
+function Tabs<T extends string>({ options, value, onChange, label }: { options: readonly T[]; value: T; onChange: (v: T) => void; label: (v: T) => string }) {
+  return (
+    <div className="flex bg-slate-100 p-1 rounded-xl">
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={value === option}
+          onClick={() => onChange(option)}
+          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${value === option ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500'}`}
+        >
+          {label(option)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function SecureShare() {
+  const t = useT();
+  const [mode, setMode] = useState<Mode>('encrypt');
+  const [kind, setKind] = useState<Kind>('text');
+  const [text, setText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [passphrase, setPassphrase] = useState('');
   const [output, setOutput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const process = async () => {
-    if (!input || !passphrase) return;
-    setIsProcessing(true);
-    try {
-      if (mode === 'encrypt') {
-        const result = await encryptData(input, passphrase);
-        setOutput(result);
-      } else {
-        const result = await decryptData(input, passphrase);
-        setOutput(result);
-      }
-    } catch (e) {
-      alert('Operation failed. Check your passphrase.');
-    } finally {
-      setIsProcessing(false);
+  const reset = () => {
+    setText('');
+    setFile(null);
+    setOutput('');
+    setMessage(null);
+  };
+
+  const run = async () => {
+    if (kind === 'text') {
+      setOutput(mode === 'encrypt' ? await encryptText(text, passphrase) : await decryptText(text, passphrase));
+      return;
+    }
+    if (!file) return;
+    // A file at the limit must decrypt again, so the limit for a container is higher.
+    if (file.size > (mode === 'encrypt' ? MAX_FILE_BYTES : MAX_CONTAINER_BYTES)) {
+      setMessage({ tone: 'error', text: t('share.tooLarge') });
+      return;
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (mode === 'encrypt') {
+      const sealed = await encryptFile({ name: file.name, type: file.type, bytes }, passphrase);
+      // The name of the encrypted file must not show the name of the original.
+      downloadBlob(new Blob([sealed], { type: 'application/octet-stream' }), ENCRYPTED_FILE_NAME);
+      setMessage({ tone: 'info', text: t('share.fileSaved', { name: ENCRYPTED_FILE_NAME }) });
+    } else {
+      const plain = await decryptFile(bytes, passphrase);
+      // A generic type makes the browser save the file. It never opens it inside the app.
+      downloadBlob(new Blob([plain.bytes], { type: 'application/octet-stream' }), plain.name);
+      setMessage({ tone: 'info', text: t('share.fileSaved', { name: plain.name }) });
     }
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(output);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage(null);
+    setOutput('');
+    run()
+      .catch(() => setMessage({ tone: 'error', text: t('crypto.failed') }))
+      .finally(() => setBusy(false));
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(output);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const hasInput = kind === 'text' ? text.trim() !== '' : file !== null;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Secure Text Exchange</h2>
-        <p className="text-slate-500">Encrypt text or small files for safe transport via USB or insecure channels.</p>
-      </div>
+      <ToolHeader title={t('share.title')} subtitle={t('share.subtitle')} synced={false} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Input Side */}
-        <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button
-              onClick={() => { setMode('encrypt'); setOutput(''); setInput(''); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-                mode === 'encrypt' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'
-              }`}
-            >
-              Encrypt
-            </button>
-            <button
-              onClick={() => { setMode('decrypt'); setOutput(''); setInput(''); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-                mode === 'decrypt' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
-              }`}
-            >
-              Decrypt
-            </button>
-          </div>
+        <form onSubmit={submit} className="bg-white border border-slate-200 p-6 rounded-3xl space-y-5">
+          <Tabs options={['encrypt', 'decrypt'] as const} value={mode} label={(v) => t(`share.mode.${v}`)} onChange={(v) => { setMode(v); reset(); }} />
+          <Tabs options={['text', 'file'] as const} value={kind} label={(v) => t(`share.kind.${v}`)} onChange={(v) => { setKind(v); reset(); }} />
 
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest">
-              {mode === 'encrypt' ? 'Message to Encrypt' : 'Encrypted String'}
-            </label>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="w-full h-40 bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-mono focus:ring-2 focus:ring-emerald-500/20 outline-none resize-none"
-              placeholder={mode === 'encrypt' ? "Type your secret message here..." : "Paste the encrypted string here..."}
-            />
-          </div>
+          {kind === 'text' ? (
+            <Field label={mode === 'encrypt' ? t('share.textToEncrypt') : t('share.textToDecrypt')}>
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} spellCheck={mode === 'encrypt'} className={`${inputClass} font-mono resize-none`} />
+            </Field>
+          ) : (
+            <Field label={mode === 'encrypt' ? t('share.fileToEncrypt') : t('share.fileToDecrypt')}>
+              <input
+                key={mode}
+                type="file"
+                accept={mode === 'decrypt' ? '.snj' : undefined}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className={inputClass}
+              />
+            </Field>
+          )}
 
-          <div className="relative">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest">Passphrase</label>
-            <div className="relative">
-               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-               <input
-                 type="password"
-                 value={passphrase}
-                 onChange={(e) => setPassphrase(e.target.value)}
-                 className="w-full bg-slate-50 border border-slate-200 p-3.5 pl-11 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none"
-               />
-            </div>
-          </div>
+          {kind === 'file' && mode === 'encrypt' && <Notice>{t('share.fileNote')}</Notice>}
 
-          <button
-            onClick={process}
-            disabled={isProcessing || !input || !passphrase}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${
-              mode === 'encrypt' 
-                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20' 
-                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20'
-            } disabled:opacity-50 disabled:shadow-none`}
-          >
-            {isProcessing ? 'Processing...' : (mode === 'encrypt' ? 'Lock Message' : 'Unlock Message')}
-            {mode === 'encrypt' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-          </button>
-        </div>
+          <Field label={t('passphrase.label')}>
+            <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate={mode === 'encrypt'} />
+          </Field>
 
-        {/* Output Side */}
-        <div className="bg-slate-900 text-white p-8 rounded-3xl relative overflow-hidden flex flex-col">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-          
-          <div className="flex justify-between items-center mb-6 relative z-10">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <FileLock className="w-5 h-5 text-emerald-400" /> Output
-            </h3>
+          <Button type="submit" variant={mode === 'encrypt' ? 'primary' : 'dark'} className="w-full" disabled={busy || !hasInput || passphrase === ''}>
+            {mode === 'encrypt' ? <Lock className="w-4 h-4" aria-hidden="true" /> : <Unlock className="w-4 h-4" aria-hidden="true" />}
+            {busy ? t('common.working') : t(`share.mode.${mode}`)}
+          </Button>
+          {message && <Notice tone={message.tone}>{message.text}</Notice>}
+        </form>
+
+        <div className="bg-slate-900 text-white p-6 rounded-3xl flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-lg">{t('share.output')}</h3>
             {output && (
-              <button 
-                onClick={copyToClipboard}
-                className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors"
-              >
-                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
+              <Button variant="light" className="!px-3 !py-1.5 !text-xs" onClick={() => void copy()}>
+                {copied ? <Check className="w-3 h-3" aria-hidden="true" /> : <Copy className="w-3 h-3" aria-hidden="true" />}
+                {copied ? t('common.copied') : t('common.copy')}
+              </Button>
             )}
           </div>
-
-          <div className="flex-1 bg-slate-950/50 rounded-2xl p-4 border border-slate-800 relative z-10">
-             {output ? (
-               <p className="font-mono text-xs text-slate-300 break-all leading-relaxed whitespace-pre-wrap">{output}</p>
-             ) : (
-               <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-3">
-                 <FileText className="w-8 h-8 opacity-50" />
-                 <p className="text-sm">Result will appear here</p>
-               </div>
-             )}
-          </div>
-
-          <div className="mt-6 text-xs text-slate-500 leading-relaxed relative z-10">
-            <strong className="text-slate-400">Security Note:</strong> We use AES-GCM (256-bit) encryption derived from your passphrase via PBKDF2 (100k iterations). This happens entirely in your browser memory.
-          </div>
+          <output className="flex-1 min-h-32 bg-slate-950/50 rounded-2xl p-4 border border-slate-800 font-mono text-xs text-slate-300 break-all whitespace-pre-wrap">
+            {output || <span className="text-slate-600">{kind === 'text' ? t('share.outputEmpty') : t('share.outputFile')}</span>}
+          </output>
+          <p className="text-xs text-slate-400 leading-relaxed">{t('share.note')}</p>
         </div>
       </div>
     </div>
   );
-};
-
-export default SecureShare;
+}
