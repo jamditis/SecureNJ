@@ -108,4 +108,4 @@ Accepted and documented in `docs/security.md`, not fixed:
 - Retention depends on the clock and the sync state of each device (limit 6). A fix needs a trusted time source or a different delete model.
 - The content security policy permits a WebSocket to any host, because the group sets the signaling server at run time.
 - A signaling server can replay old "announce" messages and show false peers. This is in `y-webrtc`.
-- The event page is not signed (limit 12).
+- The event page is not signed (limit 13).

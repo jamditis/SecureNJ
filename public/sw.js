@@ -10,7 +10,8 @@
  * - Other app files: the saved copy first. Their names change when their
  *   content changes, so a saved copy is never out of date.
  */
-const CACHE = 'snj-app-v1';
+const CACHE_PREFIX = 'snj-app-';
+const CACHE = `${CACHE_PREFIX}v1`;
 const PAGE = './index.html';
 // Many hosts send a "Vary" header. A saved file is selected by its address
 // only: the app has one version of each file for all browsers.
@@ -49,7 +50,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      // Cache storage is shared with other sites on the same origin. Remove
+      // only older caches of this app.
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });

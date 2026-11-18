@@ -4,7 +4,7 @@
  * history. The data is in the part after "#", which a browser does not send
  * to the web server.
  */
-import { parseSignalingUrls } from './space';
+import { MAX_SPACE_NAME_LENGTH, parseSignalingUrls } from './space';
 
 export interface Invite {
   name: string;
@@ -12,7 +12,6 @@ export interface Invite {
 }
 
 const PREFIX = '#join=';
-const MAX_NAME_LENGTH = 100;
 
 function toBase64Url(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -41,7 +40,7 @@ export function readInvite(hash: string, pageIsSecure: boolean): Invite | null {
     const data: unknown = JSON.parse(fromBase64Url(hash.slice(PREFIX.length)));
     if (typeof data !== 'object' || data === null) return null;
     const { n: name, s: servers } = data as Record<string, unknown>;
-    if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_NAME_LENGTH) return null;
+    if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_SPACE_NAME_LENGTH) return null;
     const list = Array.isArray(servers) ? servers.filter((url): url is string => typeof url === 'string') : [];
     return { name: name.trim(), signaling: parseSignalingUrls(list.join(' '), pageIsSecure).urls };
   } catch {

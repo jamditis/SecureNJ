@@ -22,6 +22,9 @@ export interface SpaceKeys {
 const encoder = new TextEncoder();
 const STORAGE_KEY = 'snj.space';
 
+/** The space dialog and the invite link use the same limit. */
+export const MAX_SPACE_NAME_LENGTH = 100;
+
 export function normalizeSpaceName(name: string): string {
   return name.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
 }

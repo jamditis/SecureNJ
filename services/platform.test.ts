@@ -4,6 +4,7 @@ import { NotABackupError, restoreBackup, sealBackup } from './backup';
 import { DecryptionError, encryptFile } from './crypto';
 import { pickLocale } from './i18n';
 import { makeInviteLink, readInvite } from './invite';
+import { MAX_SPACE_NAME_LENGTH } from './space';
 
 const PASSPHRASE = 'backup passphrase for tests';
 
@@ -87,6 +88,12 @@ describe('invite link', () => {
     expect(readInvite(encode({ n: '', s: [] }), true)).toBeNull();
     expect(readInvite(encode({ n: 'x'.repeat(101), s: [] }), true)).toBeNull();
     expect(readInvite(encode({ n: 42 }), true)).toBeNull();
+  });
+
+  it('reads each invite that the app can make', () => {
+    // A space name has a length limit. A link for a name at the limit must open.
+    const longest = { name: 'ñ'.repeat(MAX_SPACE_NAME_LENGTH), signaling: [] };
+    expect(readInvite(new URL(makeInviteLink('https://a.example/', longest)).hash, true)).toEqual(longest);
   });
 
   it('accepts an invite with no servers', () => {

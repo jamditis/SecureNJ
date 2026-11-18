@@ -24,7 +24,7 @@ import { WebrtcProvider } from 'y-webrtc';
 import { Awareness } from 'y-protocols/awareness';
 import { ICE_SERVER_URLS } from './config';
 import { useT } from './i18n';
-import { eraseDevice } from './wipe';
+import { eraseDevice, forgetDatabase, rememberDatabase } from './wipe';
 import { forgetMember, getMemberId, loadMemberName, saveMemberName } from './identity';
 import { purgeExpired } from './retention';
 import {
@@ -263,6 +263,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       // Key derivation is slow by design. It runs before any network use.
       const keys = config ? await deriveSpaceKeys(config.name, config.passphrase) : null;
       if (cancelled) return;
+      if (keys) rememberDatabase(localStorage, keys.roomId);
       opened = openSession({
         keys,
         signaling: config?.signaling ?? [],
@@ -330,6 +331,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setConfig(null);
       if (!deleteLocalCopy) return true;
       forgetMember(localStorage, dbName);
+      forgetDatabase(localStorage, dbName);
       setMemberNameState('');
       // The browser waits until all tabs close the database. Do not wait
       // without limit: the delete completes later if a tab is slow.

@@ -4,7 +4,7 @@ import { DEFAULT_SIGNALING_URLS, ICE_SERVER_URLS } from '../services/config';
 import { useT } from '../services/i18n';
 import { makeInviteLink, type Invite } from '../services/invite';
 import { isWeakPassphrase } from '../services/passphrase';
-import { parseSignalingUrls } from '../services/space';
+import { MAX_SPACE_NAME_LENGTH, parseSignalingUrls } from '../services/space';
 import { useSync } from '../services/sync';
 import QrCode from './QrCode';
 import { Button, Field, Modal, Notice, PassphraseInput, inputClass } from './ui';
@@ -101,7 +101,7 @@ export default function SpaceDialog({ onClose, invite = null }: SpaceDialogProps
       <form onSubmit={submit} className="space-y-4">
         {invite ? <Notice tone="warning">{t('invite.received', { name: invite.name })}</Notice> : <p className="text-sm text-slate-600 leading-relaxed">{t('space.intro')}</p>}
         <Field label={t('space.name')}>
-          <input value={name} onChange={(event) => setName(event.target.value)} autoFocus={!invite} className={inputClass} />
+          <input value={name} onChange={(event) => setName(event.target.value)} autoFocus={!invite} maxLength={MAX_SPACE_NAME_LENGTH} className={inputClass} />
         </Field>
         <Field label={t('space.passphrase')}>
           <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate={!invite} autoFocus={!!invite} />

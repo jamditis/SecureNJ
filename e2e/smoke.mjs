@@ -137,6 +137,17 @@ async function main() {
     await solo.getByRole('heading', { name: 'Tools for local resilience' }).waitFor();
 
     console.log('1d. "Erase all data" removes the data, the offline copy, and the service worker');
+    // A different site on the same web origin has its own data. The erase must not touch it.
+    await solo.evaluate(async () => {
+      localStorage.setItem('other-app.key', 'keep');
+      await caches.open('other-app-cache');
+      await new Promise((resolve) => {
+        indexedDB.open('other-app-db').onsuccess = (event) => {
+          event.target.result.close();
+          resolve();
+        };
+      });
+    });
     await solo.getByRole('button', { name: 'Data on this device' }).click();
     await solo.getByRole('button', { name: 'Erase all data' }).click();
     await solo.getByRole('button', { name: 'Erase now. I cannot undo this.' }).click();
@@ -148,7 +159,11 @@ async function main() {
       caches: await caches.keys(),
       workers: (await navigator.serviceWorker.getRegistrations()).length,
     }));
-    assert.deepEqual(erased, { databases: [], local: [], session: [], caches: [], workers: 0 }, 'erase must leave nothing in the browser');
+    assert.deepEqual(
+      erased,
+      { databases: ['other-app-db'], local: ['other-app.key'], session: [], caches: ['other-app-cache'], workers: 0 },
+      'erase must remove all data of this app and no data of a different site',
+    );
 
     console.log('2. Two members join one space and sync over WebRTC');
     const ana = await openMember(browser, appUrl, 'ana');
@@ -254,7 +269,12 @@ async function main() {
       session: Object.keys(sessionStorage),
     }));
     assert.deepEqual(left.databases.filter((name) => !['snj-local', 'snj-private'].includes(name)), [], 'the space database must be deleted');
-    assert.deepEqual(left.local.filter((key) => key !== 'snj.member.snj-local'), [], 'the member ID and the name of the space must be deleted');
+    assert.deepEqual(
+      left.local.filter((key) => key !== 'snj.member.snj-local'),
+      ['snj.databases'],
+      'the member ID and the name of the space must be deleted',
+    );
+    assert.equal(await ana.evaluate(() => localStorage.getItem('snj.databases')), '[]', 'the list of space databases must be empty');
     assert.deepEqual(left.session, [], 'the passphrase must be deleted');
     // Ben is still connected to Cy only.
     await ben.getByRole('navigation').getByText('Connected peers: 1').waitFor({ timeout: 40_000 });
