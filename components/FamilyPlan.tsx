@@ -162,7 +162,7 @@ export default function FamilyPlan() {
         {locale !== 'en' && (
           <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
             <p>{t('family.translatedNotice')}</p>
-            <ul className="list-disc pl-5">
+            <ul className="list-disc ps-5">
               {text.languageLinks.map((link) => (
                 <li key={link.href}>
                   <OutsideLink {...link} />
@@ -174,7 +174,7 @@ export default function FamilyPlan() {
 
         <section className={CARD_CLASS}>
           <h3 className="font-bold text-slate-900 text-lg">{t('family.firstSteps')}</h3>
-          <ol className="list-decimal pl-5 space-y-1.5 text-sm text-slate-700">
+          <ol className="list-decimal ps-5 space-y-1.5 text-sm text-slate-700">
             {text.firstSteps.map((step) => (
               <li key={step}>{step}</li>
             ))}

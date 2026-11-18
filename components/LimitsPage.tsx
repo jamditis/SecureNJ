@@ -24,7 +24,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.doesTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {DOES.map((key) => (
             <li key={key}>{t(key)}</li>
           ))}
@@ -33,7 +33,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.doesNotTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {doesNot.map(({ lead, text }) => (
             <li key={lead}>
               <strong>{t(lead)}</strong> {t(text)}
@@ -44,7 +44,7 @@ export default function LimitsPage() {
 
       <section className="space-y-3">
         <h3 className="text-xl font-bold text-slate-900">{t('limits.habitsTitle')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-slate-700 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-slate-700 leading-relaxed">
           {HABITS.map((key) => (
             <li key={key}>{t(key)}</li>
           ))}

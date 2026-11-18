@@ -94,8 +94,8 @@ export default function SupplyInventory() {
 
       <div className="flex flex-col md:flex-row gap-3 md:items-center bg-white p-4 rounded-3xl border border-slate-200">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('supplies.search')} aria-label={t('supplies.search')} className={`${inputClass} pl-9`} />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('supplies.search')} aria-label={t('supplies.search')} className={`${inputClass} ps-9`} />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600 whitespace-nowrap">
           <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} className="w-4 h-4 accent-emerald-600" />

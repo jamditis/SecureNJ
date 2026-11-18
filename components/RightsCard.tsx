@@ -132,7 +132,7 @@ export default function RightsCard() {
         {card.sections.map((section) => (
           <Fragment key={section.heading}>
             <h4 className="font-bold">{section.heading}</h4>
-            <ul className="list-disc pl-5 space-y-0.5">
+            <ul className="list-disc ps-5 space-y-0.5">
               {section.items.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -155,7 +155,7 @@ export default function RightsCard() {
       <div className="no-print space-y-6">
         <div className="space-y-2">
           <h3 className={sectionTitleClass}>{t('rights.official.title')}</h3>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+          <ul className="list-disc ps-5 space-y-1 text-sm text-slate-700">
             <li>
               <Rich template={t('rights.official.ilrc')} slots={{ link: <OutsideLink href={RIGHTS_LINKS.ilrcRedCards}>{t('rights.official.ilrc.link')}</OutsideLink> }} />
             </li>
@@ -175,7 +175,7 @@ export default function RightsCard() {
         </div>
         <div className="space-y-2">
           <h3 className={sectionTitleClass}>{t('rights.phone.title')}</h3>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+          <ul className="list-disc ps-5 space-y-1 text-sm text-slate-700">
             <li>{t('rights.phone.memorize')}</li>
             <li>{t('rights.phone.passcode')}</li>
             <li>

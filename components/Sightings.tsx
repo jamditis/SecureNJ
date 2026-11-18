@@ -160,7 +160,7 @@ export default function Sightings() {
                     <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                     {item.clearedAt === null ? t('alerts.markClear') : t('alerts.reopen')}
                   </Button>
-                  <IconButton icon={Trash2} label={t('alerts.remove')} className="ml-auto" onClick={() => remove([item.id])} />
+                  <IconButton icon={Trash2} label={t('alerts.remove')} className="ms-auto" onClick={() => remove([item.id])} />
                 </div>
               </article>
             );

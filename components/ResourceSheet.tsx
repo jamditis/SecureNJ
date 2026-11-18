@@ -127,7 +127,7 @@ export default function ResourceSheet() {
           {locale !== 'en' && (
             <div className="text-xs leading-relaxed p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 space-y-1">
               <p>{t('sheet.startersNote')}</p>
-              <ul className="list-disc pl-5">
+              <ul className="list-disc ps-5">
                 {SPANISH_LINKS.map((link) => (
                   <li key={link.id}>
                     <a href={link.url} target="_blank" rel="noopener noreferrer" className={linkClass}>

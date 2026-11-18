@@ -69,7 +69,7 @@ function GateForm({ tool, title }: { tool: string; title: string }) {
       <p className="text-sm text-slate-600 leading-relaxed">{t('room.intro')}</p>
       {MEMORY_ONLY_TOOLS.has(tool) && <Notice>{t('room.memoryOnly')}</Notice>}
       <Field label={t('room.name')}>
-        <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="off" maxLength={MAX_SPACE_NAME_LENGTH} className={inputClass} />
+        <input value={name} onChange={(event) => setName(event.target.value)} dir="auto" autoComplete="off" maxLength={MAX_SPACE_NAME_LENGTH} className={inputClass} />
       </Field>
       <Field label={t('room.passphrase')}>
         <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate />
@@ -81,6 +81,7 @@ function GateForm({ tool, title }: { tool: string; title: string }) {
           rows={2}
           placeholder="wss://signaling.example.org"
           spellCheck={false}
+          dir="ltr"
           className={`${inputClass} font-mono`}
         />
       </Field>
@@ -196,7 +197,7 @@ function RoomDialog({ tool, onClose }: { tool: string; onClose: () => void }) {
             <h4 className="font-bold text-slate-900">{t('invite.title')}</h4>
             <p className="text-sm text-slate-600 leading-relaxed">{t('invite.note')}</p>
             <div className="flex gap-2">
-              <input readOnly value={link} aria-label={t('invite.link')} onFocus={(event) => event.target.select()} className={`${inputClass} font-mono`} />
+              <input readOnly value={link} dir="ltr" aria-label={t('invite.link')} onFocus={(event) => event.target.select()} className={`${inputClass} font-mono`} />
               <Button variant="light" onClick={() => void copyLink()}>
                 <Copy className="w-4 h-4" aria-hidden="true" /> {copied ? t('common.copied') : t('invite.copy')}
               </Button>

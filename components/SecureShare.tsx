@@ -134,6 +134,8 @@ export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
             onChange={(event) => setText(event.target.value)}
             rows={mode === 'lock' ? 7 : 5}
             spellCheck={false}
+            // A message takes the direction of its text. Locked text (snj2.…) is always left to right.
+            dir={mode === 'lock' ? 'auto' : 'ltr'}
             className={`${inputClass} ${mode === 'lock' ? '' : 'font-mono break-all'}`}
           />
         </Field>
@@ -156,7 +158,7 @@ export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
               {copyButton('text', locked, 'lock.copyText', 'light')}
             </div>
             {copied === 'failed' && <Notice tone="error">{t('lock.copyFailed')}</Notice>}
-            <p data-testid="locked-text" className="font-mono text-xs text-slate-700 break-all bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
+            <p data-testid="locked-text" dir="ltr" className="font-mono text-xs text-slate-700 break-all bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
               {locked}
             </p>
             {qr && (
@@ -173,7 +175,7 @@ export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
         {unlocked !== null && (
           <section className="bg-white border border-slate-200 p-6 rounded-3xl space-y-4">
             <h3 className="font-bold text-lg text-slate-900">{t('lock.messageHeading')}</h3>
-            <p data-testid="unlocked-text" className="text-sm text-slate-900 whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <p data-testid="unlocked-text" dir="auto" className="text-sm text-slate-900 whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded-xl p-3">
               {unlocked}
             </p>
             {copyButton('message', unlocked, 'lock.copyMessage', 'light')}
@@ -185,7 +187,7 @@ export default function SecureShare({ lockedFromLink = '' }: SecureShareProps) {
 
       <section className="space-y-3">
         <h3 className="font-bold text-lg text-slate-900">{t('lock.how.title')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-sm text-slate-600 leading-relaxed">
           <li>{t('lock.how.1')}</li>
           <li>{t('lock.how.2')}</li>
           <li>{t('lock.how.3')}</li>

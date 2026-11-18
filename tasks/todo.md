@@ -130,7 +130,7 @@ Steps:
 - [x] Reference text with keys. Components show it in the language of the UI. The rights card can also show in English.
 - [x] Script for missing and stale translations, with tests.
 - [x] Translations: Spanish reference text; Portuguese and Chinese for all text.
-- [ ] Translations: Haitian Creole and Arabic for all text.
+- [x] Translations: Haitian Creole and Arabic for all text.
 - [ ] Right-to-left layout for Arabic, with an end-to-end check.
 - [x] Docs.
 - [ ] Review by independent agents.

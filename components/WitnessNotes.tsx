@@ -166,7 +166,7 @@ export default function WitnessNotes() {
 
       <section className="max-w-2xl space-y-3">
         <h3 className="text-lg font-bold text-slate-900">{t('witness.share.title')}</h3>
-        <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600 leading-relaxed">
+        <ul className="list-disc ps-5 space-y-2 text-sm text-slate-600 leading-relaxed">
           <li>{t('witness.share.lawyer')}</li>
           <li>{t('witness.share.consent')}</li>
           <li>{t('witness.share.officers')}</li>

@@ -120,7 +120,7 @@ export default function PhoneTree() {
           <Users className="w-5 h-5 text-emerald-500" aria-hidden="true" /> {t('tree.contacts', { count: contacts.length })}
         </h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-start text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
                 <th className="px-5 py-3">{t('tree.field.name')}</th>
@@ -144,7 +144,7 @@ export default function PhoneTree() {
                     <td className="px-5 py-3 font-mono text-slate-600">{contact.contact}</td>
                     <td className="px-5 py-3">{t(`tree.role.${contact.role}`)}</td>
                     <td className="px-5 py-3 text-slate-500">{contact.notes}</td>
-                    <td className="px-5 py-1 text-right">
+                    <td className="px-5 py-1 text-end">
                       <IconButton icon={Trash2} label={t('tree.remove', { name: contact.name })} onClick={() => map.delete(contact.id)} />
                     </td>
                   </tr>

@@ -106,7 +106,7 @@ export default function SharePage() {
               <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t('sharePage.flyerTitle')}</h3>
               <p className="text-slate-700">{t('sharePage.flyerIntro')}</p>
               <p className="font-bold text-slate-900 [overflow-wrap:anywhere]">{address}</p>
-              <ul className="list-disc pl-5 space-y-1 text-slate-700">
+              <ul className="list-disc ps-5 space-y-1 text-slate-700">
                 {flyerTools().map((tool) => (
                   <li key={tool.id}>
                     <strong>{t('sharePage.flyerItemTitle', { title: t(tool.title) })}</strong> {t(tool.use)}
@@ -130,7 +130,7 @@ export default function SharePage() {
           <h3 className="text-xl font-bold text-slate-900">{t('sharePage.hostTitle')}</h3>
           <p className="text-slate-600 max-w-2xl">{t('sharePage.hostIntro')}</p>
         </div>
-        <ol className="list-decimal pl-5 space-y-2 text-slate-700 leading-relaxed max-w-3xl">
+        <ol className="list-decimal ps-5 space-y-2 text-slate-700 leading-relaxed max-w-3xl">
           {HOST_STEPS.map((step) => (
             <li key={step}>
               <RichText message={t(step)} />

@@ -166,7 +166,7 @@ export default function PhotoCleaner() {
 
       <section className="bg-white border border-slate-200 p-6 rounded-3xl space-y-3">
         <h3 className="font-bold text-lg text-slate-900">{t('photo.limitsTitle')}</h3>
-        <ul className="space-y-2 text-sm text-slate-600 list-disc pl-5">
+        <ul className="space-y-2 text-sm text-slate-600 list-disc ps-5">
           <li>{t('photo.limit.visible')}</li>
           <li>{t('photo.limit.video')}</li>
           <li>{t('photo.limit.original')}</li>

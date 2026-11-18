@@ -131,7 +131,7 @@ export default function App() {
           setActiveTool(id);
           setIsSidebarOpen(false);
         }}
-        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-colors border ${activeTool === id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-transparent hover:bg-slate-800 hover:text-white'}`}
+        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-start text-sm font-medium transition-colors border ${activeTool === id ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-transparent hover:bg-slate-800 hover:text-white'}`}
       >
         <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
         {label}
@@ -154,7 +154,7 @@ export default function App() {
 
       <nav
         aria-label={t('nav.label')}
-        className={`no-print fixed inset-0 top-14 z-30 bg-slate-900 text-slate-300 transition-transform md:translate-x-0 md:sticky md:top-0 md:h-screen md:w-72 md:shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`no-print fixed inset-0 top-14 z-30 bg-slate-900 text-slate-300 transition-transform md:translate-x-0 md:rtl:translate-x-0 md:sticky md:top-0 md:h-screen md:w-72 md:shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'}`}
       >
         <div className="p-6 h-full flex flex-col gap-6 overflow-y-auto">
           <div className="hidden md:flex items-center gap-3">
@@ -178,7 +178,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setIsDeviceOpen(true)}
-              className="w-full flex items-center gap-2 px-4 py-2 rounded-xl text-left text-sm hover:bg-slate-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2 rounded-xl text-start text-sm hover:bg-slate-800 hover:text-white transition-colors"
             >
               <Database className="w-4 h-4" aria-hidden="true" /> {t('device.open')}
             </button>

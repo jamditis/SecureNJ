@@ -119,7 +119,7 @@ export default function Dashboard({ onSelectTool }: { onSelectTool: (id: ToolId)
                   key={tool.id}
                   type="button"
                   onClick={() => onSelectTool(tool.id)}
-                  className="group flex items-start gap-4 p-5 bg-white border border-slate-200 rounded-2xl text-left transition-shadow hover:shadow-lg hover:border-emerald-500/40"
+                  className="group flex items-start gap-4 p-5 bg-white border border-slate-200 rounded-2xl text-start transition-shadow hover:shadow-lg hover:border-emerald-500/40"
                 >
                   <div className={`${tool.color} w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0`}>
                     <tool.icon className="w-5 h-5" aria-hidden="true" />
