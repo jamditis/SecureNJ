@@ -2,13 +2,13 @@ import { Languages } from 'lucide-react';
 import { SOURCE_CODE_URL } from '../content/resources';
 import { LOCALES, useI18n, type Locale } from '../services/i18n';
 
-/** English is the source text. A person must review each other language before it loses its note. */
+/** English is the source text. Each other language is a machine translation, and keeps its note until a person reviews it. */
 const REVIEWED_LOCALES: ReadonlySet<Locale> = new Set<Locale>(['en']);
 
 /**
  * The language choice. For a language that no person has reviewed, it says
  * so, and it gives a place to report an error: a wrong translation of a
- * safety text can mislead a reader.
+ * safety text can mislead a reader. No review is planned, so the note stays.
  */
 export default function LanguageSwitch() {
   const { t, locale, setLocale } = useI18n();

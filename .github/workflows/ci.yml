@@ -1,8 +1,7 @@
 name: CI
 
+# The publish workflow runs the same checks on main, so this one runs on pull requests only.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:

@@ -60,7 +60,7 @@ Decisions from the owner during this work:
 - The source of the published site (`gh-pages`) is lost. Rebuild its tools and pages here, in the current look, with its wording for those tools and pages.
 - Use its four strict rules: one room for each tool, never store the passphrase, do not save alerts to disk, strong passphrase check everywhere.
 - Legal text stays in English in the Spanish UI, with official Spanish links.
-- Do not touch the live site until the owner approves a publish.
+- Do not touch the live site until the owner approves a publish. (Replaced on 2026-11-18: each merge to `main` publishes, with no person step.)
 
 Platform:
 
@@ -92,10 +92,26 @@ Ported from the published site:
 
 Not done, for a person to do:
 
-- [ ] A native speaker reviews the Spanish text. Until then, the Spanish UI shows a note that the text is a machine translation. After the review, add `es` to `REVIEWED_LOCALES` in `components/LanguageSwitch.tsx`. Strings with an open choice: "reporte" for both an alert report and a check-in; "despejado" for "clear"; "postura" for a position; "preocupación" for a concern; the one legal sentence in the witness notes notice.
 - [ ] A person confirms the rapid response hotline number (1-800-308-0878), which comes from the published site.
 - [ ] Test the photo cleaner in Safari and Firefox. It was tested in Chromium only.
-- [ ] Publish: run the workflow "Publish to the live site" in the Actions tab when you are ready. The live site still serves the old build.
+
+## Pull request 3 of this plan (jamditis/SecureNJ#6): publish with no person step
+
+Decisions from the owner (2026-11-18): "i dont want a person to start it", "auto translation and auto deploy please".
+
+- [x] Each push to `main` runs the checks and publishes the build to `gh-pages`. The run fails if the live site does not serve the new build.
+- [x] The machine translation of the UI is final. No person review is planned. The note "This text is a machine translation" stays, with a link to report an error.
+- [x] The old site's caches are removed by the new service worker and by "Erase all data".
+
+The publish workflow can run only after the merge. Its first run is the first real test of the push to `gh-pages` and of the Pages build request.
+
+## Pull request 4 of this plan: automatic translation. Not started.
+
+Decisions from the owner (2026-11-18):
+
+- Translate the legal and reference text too (rights card, family plan, resource text). This replaces "English text plus official links".
+- Add Portuguese (Brazil), Haitian Creole, Chinese (Simplified), and Arabic.
+- Translate new text in CI with LibreTranslate, which runs inside the workflow. No key and no outside service.
 
 ## Known limits, not in either pull request
 

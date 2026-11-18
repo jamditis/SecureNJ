@@ -77,13 +77,11 @@ Optional build settings go in `.env.local`. See [.env.example](.env.example).
 
 ## Publish to GitHub Pages
 
-A push or a merge does not change the live site. To publish:
+Each push to `main` publishes the live site. A merge of a pull request is a push. There is no step for a person.
 
-1. Open the Actions tab of the repository.
-2. Select "Publish to the live site", then "Run workflow", on the `main` branch.
-3. Type `publish` in the confirm field.
+The workflow "Publish to the live site" runs all checks, builds `main`, and writes the build to the `gh-pages` branch, which GitHub Pages serves. Then it waits until the live site serves the new page. A build that fails a check is not published. The history of `gh-pages` keeps each earlier build: to go back, revert the last commit on `gh-pages`, or revert the change on `main`.
 
-The workflow runs all checks, builds `main`, and writes the build to the `gh-pages` branch, which GitHub Pages serves. A build that fails a check is not published. The history of `gh-pages` keeps each earlier build.
+To publish `main` again with no new commit, open the Actions tab, select "Publish to the live site", then "Run workflow".
 
 Optional repository variables: `VITE_SIGNALING_URLS` (the default signaling servers) and `VITE_SITE_URL` (the address for link previews, if the site has its own domain).
 
