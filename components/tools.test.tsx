@@ -3,12 +3,12 @@ import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
+import { deleteRecords } from '../services/retention';
 import type { MutualAidPost, Sighting } from '../types';
 import ConsensusBuilder from './ConsensusBuilder';
 import MutualAid from './MutualAid';
 import PhoneTree from './PhoneTree';
 import Sightings from './Sightings';
-import SpaceDialog from './SpaceDialog';
 import StatusBoard from './StatusBoard';
 import { createTestSync, renderWithSync } from './test-utils';
 
@@ -88,6 +88,15 @@ describe('safety alerts', () => {
     await user.click(screen.getByRole('button', { name: 'Delete the report' }));
     expect(sync.doc.getMap('sightings').size).toBe(0);
     expect(Array.from(sync.doc.getMap('confirmations').keys())).toEqual(['bad', 'worse']);
+  });
+
+  it('hides a report that came back through a merge after a member deleted it', () => {
+    const sync = createTestSync();
+    deleteRecords(sync.doc, 'sightings', ['s1']);
+    // A member who was not connected changed the report. The merge puts the record back.
+    sync.doc.getMap('sightings').set('s1', sighting({ clearedAt: 5 }));
+    renderWithSync(<Sightings />, sync);
+    expect(screen.queryByRole('article')).toBeNull();
   });
 
   it('ignores a record that is stored under a key that is not its ID', () => {
@@ -272,35 +281,6 @@ describe('phone tree', () => {
     expect(di).toContain('Ben (2)');
     expect(di).not.toContain('Ana');
     expect(di).not.toContain('Cy');
-  });
-});
-
-describe('space dialog', () => {
-  it('does not open a space with a weak passphrase', async () => {
-    // The signaling server sees the room ID and can test guesses of the passphrase.
-    const user = userEvent.setup();
-    const joined: unknown[] = [];
-    const sync = createTestSync({ join: (config) => joined.push(config) });
-    renderWithSync(<SpaceDialog onClose={() => {}} />, sync);
-    const open = screen.getByRole<HTMLButtonElement>('button', { name: 'Open the space' });
-    const passphrase = document.querySelector<HTMLInputElement>('input[type=password]')!;
-
-    await user.type(screen.getByLabelText('Space name'), 'Ironbound');
-    await user.type(passphrase, 'short');
-    expect(open.disabled).toBe(true);
-
-    await user.type(passphrase, ' but now long enough');
-    expect(open.disabled).toBe(false);
-    await user.click(open);
-    expect(joined).toEqual([{ name: 'Ironbound', passphrase: 'short but now long enough', signaling: [] }]);
-  });
-
-  it('makes a passphrase of six random words', async () => {
-    const user = userEvent.setup();
-    renderWithSync(<SpaceDialog onClose={() => {}} />);
-    await user.click(screen.getByRole('button', { name: 'Make a random passphrase' }));
-    const field = screen.getByDisplayValue(/^([a-z]+ ){5}[a-z]+$/);
-    expect(field).toBeTruthy();
   });
 });
 

@@ -54,6 +54,52 @@ function deleteOrphans(map: Y.Map<unknown>, parentField: string, parents: Y.Map<
 }
 
 /**
+ * A deleted record leaves a marker. Two members can delete and edit one
+ * record at the same time: the edit writes the full record again, so with
+ * no marker the deleted record comes back after the merge, without the
+ * records that belonged to it. `useRecords` hides a record that has a
+ * marker, and `purgeExpired` deletes it again.
+ */
+const DELETED_MAP = 'deleted';
+const MARKER_DAYS = 30;
+export const deletedKey = (mapName: string, key: string) => `${mapName}:${key}`;
+
+export function isDeleted(doc: Y.Doc, mapName: string, key: string): boolean {
+  return doc.getMap(DELETED_MAP).has(deletedKey(mapName, key));
+}
+
+/** Deletes records for the full group and leaves a marker for each. */
+export function deleteRecords(doc: Y.Doc, mapName: string, keys: string[], now: number = Date.now()): void {
+  doc.transact(() => {
+    const map = doc.getMap(mapName);
+    const markers = doc.getMap<number>(DELETED_MAP);
+    keys.forEach((key) => {
+      map.delete(key);
+      markers.set(deletedKey(mapName, key), now);
+    });
+  });
+}
+
+/** Deletes records that came back after a delete, and markers that are old. */
+function applyMarkers(doc: Y.Doc, now: number): number {
+  const markers = doc.getMap<unknown>(DELETED_MAP);
+  let deleted = 0;
+  const old: string[] = [];
+  markers.forEach((at, marker) => {
+    const split = marker.indexOf(':');
+    const map = doc.getMap(marker.slice(0, split));
+    const key = marker.slice(split + 1);
+    if (map.has(key)) {
+      map.delete(key);
+      deleted += 1;
+    }
+    if (typeof at !== 'number' || now - at > MARKER_DAYS * 24 * HOUR) old.push(marker);
+  });
+  old.forEach((marker) => markers.delete(marker));
+  return deleted;
+}
+
+/**
  * Deletes expired records and the records that belonged to them, for the
  * full space. It runs for the open document at all times, not only while a
  * tool is on the screen. Returns the number of deleted records.
@@ -61,6 +107,7 @@ function deleteOrphans(map: Y.Map<unknown>, parentField: string, parents: Y.Map<
 export function purgeExpired(doc: Y.Doc, now: number): number {
   let deleted = 0;
   doc.transact(() => {
+    deleted += applyMarkers(doc, now);
     const sightings = doc.getMap<unknown>('sightings');
     const posts = doc.getMap<unknown>('posts');
     deleted += deleteOlderThan(sightings, now, readHours(doc, ALERT_RETENTION));
@@ -68,6 +115,8 @@ export function purgeExpired(doc: Y.Doc, now: number): number {
     deleted += deleteOrphans(doc.getMap('confirmations'), 'sightingId', sightings);
     deleted += deleteOrphans(doc.getMap('claims'), 'postId', posts);
     deleted += deleteOrphans(doc.getMap('votes'), 'proposalId', doc.getMap('proposals'));
+    deleted += deleteOrphans(doc.getMap('shiftSignups'), 'shiftId', doc.getMap('shifts'));
+    deleted += deleteOrphans(doc.getMap('supplyAdjustments'), 'itemId', doc.getMap('supplies'));
   });
   return deleted;
 }

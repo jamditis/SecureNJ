@@ -18,7 +18,7 @@ CI runs the same steps on each pull request (`.github/workflows/ci.yml`).
 | Kind | File | Environment |
 | --- | --- | --- |
 | Logic | `services/<name>.test.ts`, next to the code | Node |
-| Tools | `components/tools.test.tsx` | jsdom, with documents in memory (`components/test-utils.tsx`) |
+| Tools | `components/*.test.tsx` | jsdom, with documents in memory (`components/test-utils.tsx`) |
 | Full app | `e2e/smoke.mjs` | Chromium, a production build, a local signaling server |
 
 ## Rules
@@ -32,17 +32,22 @@ CI runs the same steps on each pull request (`.github/workflows/ci.yml`).
 
 ## What the end-to-end test proves
 
-1. Local mode saves data and keeps it after a reload.
-2. Two browser profiles in one space sync over WebRTC through the signaling server.
-3. Local data does not go into a space.
-4. A confirmation from one member reaches the other member.
-5. A wrong passphrase gives a different, empty space.
-6. The exported event page opens from disk with no network and decrypts.
-7. "Leave and delete" closes the connection to the signaling server and removes the space database, the member ID, and the passphrase from the device.
-8. The page makes no HTTP request and opens no WebSocket to a different host, and reports no error. This includes a violation of the content security policy.
-9. Each WebRTC connection is made with the STUN server list of the build (none in the test build).
+1. With no room, a tool saves data on the device, and safety alerts are not saved.
+2. The app opens with no connection after the first visit.
+3. The language switch changes the text and is saved.
+4. "Erase all data" removes the databases, stored values, offline copy, and service worker of this app, and leaves the data of a different site on the same origin.
+5. Two browser profiles in the room of one tool sync over WebRTC through the signaling server.
+6. The passphrase and the group name are not stored, and the room of safety alerts has no database.
+7. A wrong passphrase gives a different, empty room.
+8. A second tool needs its own room: an open room of one tool does not open a different tool.
+9. The exported event page opens from disk with no network and decrypts.
+10. An invite link fills in the group name and the servers, does not hold the passphrase, and is removed from the address.
+11. A saved room is closed after a reload, and comes back with the passphrase.
+12. "Clear from this browser" closes the connection to the signaling server and removes the database and the member ID of that room.
+13. The page makes no HTTP request and opens no WebSocket to a different host, and reports no error. This includes a violation of the content security policy.
+14. Each WebRTC connection is made with the STUN server list of the build (none in the test build).
 
-The test cannot see WebRTC traffic. Step 9 checks the configuration that the page gives to the browser.
+The test cannot see WebRTC traffic. Step 14 checks the configuration that the page gives to the browser.
 
 ## Review checklist
 
@@ -50,7 +55,9 @@ Use this list before you ask for a review, and when you review.
 
 - [ ] `npm run check` passes.
 - [ ] Each changed behavior has a test. Each bug fix has a test that failed before the fix.
-- [ ] No user-visible text in components. New text is in `locales/en.ts`, in sentence case.
+- [ ] No user-visible text in components. New text is in `locales/en/` and `locales/es/`, in sentence case.
+- [ ] Reference content in `content/` is not edited by hand, and its checksum test passes.
+- [ ] A sentence in `components/LimitsPage.tsx` or `docs/security.md` that the change makes false is corrected.
 - [ ] A new record type has a guard in `services/schema.ts`, and the tool reads it through `useRecords`.
 - [ ] A write does not overwrite a field that a different member can change at the same time. If it can, use one record for each member and action.
 - [ ] No setting that deletes shared data is local to one device, and none is written on each keystroke.

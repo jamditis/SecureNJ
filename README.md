@@ -6,26 +6,42 @@ Read [docs/security.md](docs/security.md) before you use it for sensitive work. 
 
 ## Tools
 
-Shared with your space:
+Send something privately:
 
-- **Safety alerts**: report enforcement activity, confirm reports from other members, mark a location as clear. Reports expire.
+- **Lock a message**: locks text with a passphrase. Gives a link, a QR code, and the locked text.
+- **Lock a file**: makes one locked HTML file that opens in any browser with the passphrase.
+- **Event coordinator**: makes one locked HTML file with the details of an event.
+
+Get ready before you need it:
+
+- **Know your rights card**: a printable card.
+- **Family emergency plan**: a plan to fill in, print, and save as a locked file.
+- **Phone tree**: a contact list and a call tree. Each person gets a card that names only the people they call.
+
+Document and share:
+
+- **Witness notes**: a guided form for what you saw, saved as a locked file.
+- **Photo cleaner**: removes hidden data from a photo and covers parts of it.
+- **Resource sheet**: a printable sheet of hotlines and help that a group edits.
+
+Work as a group (each tool has its own room):
+
+- **Safety alerts**: report enforcement activity, confirm reports, mark a location as clear. Never saved on the device.
 - **Group check-in**: each member shows a status. The board flags a member who needs support or who misses a check-in time.
-- **Consensus builder**: proposals, positions (support, reservations, stand aside, block), and written concerns.
-- **Whiteboard**: a shared drawing surface for site maps and routes.
 - **Mutual aid board**: requests and offers that members claim and mark as done.
+- **Consensus builder**: proposals, positions, and written concerns.
+- **Whiteboard**: a shared drawing surface.
+- **Shift roster**: shifts with sign-up. Shows the shifts that still need people.
+- **Supply inventory**: stock, location, and low-stock flags.
 
-On your device only:
-
-- **Event coordinator**: makes one encrypted HTML file with the details of an event. The file opens on any device with no connection.
-- **Phone tree**: a contact list and a call tree. Each person gets a card that names only the people they call. The list never syncs.
-- **Secure share**: encrypts text or a file with a passphrase.
+The app is in English and Spanish. It opens with no connection after the first visit.
 
 ## How it works
 
-- **Local first.** Data is saved in the browser (IndexedDB). With no space, nothing leaves the device.
-- **Spaces.** A group agrees on a space name and a passphrase. Members who type the same two values get the same shared data. The room ID and the room password come from the passphrase, so a person who does not have the passphrase cannot find the room or read its messages.
+- **Local first.** Data is saved in the browser (IndexedDB). With no room, nothing leaves the device.
+- **Rooms.** A group agrees on a group name and a passphrase. Each shared tool has its own room: the room ID and the room password come from the name, the passphrase, and the tool. A person who does not have the passphrase cannot find a room or read its messages. The app does not store the passphrase: a member types it at each visit, for each tool.
 - **Peer to peer.** Members sync directly over WebRTC (Yjs). A small signaling server introduces the peers to each other. Your group runs this server. See [docs/signaling.md](docs/signaling.md).
-- **Clone and own.** Fork the repo, build it, and serve the static files from any host.
+- **Clone and own.** Fork the repo, build it, and serve the static files from an origin that serves nothing else.
 
 [docs/architecture.md](docs/architecture.md) describes the design.
 
@@ -47,7 +63,7 @@ The app is at `http://localhost:3000`. To sync between devices, you also need a 
 npm run signaling
 ```
 
-Then type `ws://localhost:4444` in the space dialog.
+Then type `ws://localhost:4444` in the room form of a tool.
 
 ## Build and host
 

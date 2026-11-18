@@ -15,7 +15,11 @@ export default tseslint.config(
     },
   },
   {
+    files: ['public/sw.js'],
+    languageOptions: { globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly', Response: 'readonly' } },
+  },
+  {
     files: ['e2e/**/*.mjs', 'eslint.config.js'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', URL: 'readonly', window: 'readonly', indexedDB: 'readonly', localStorage: 'readonly', sessionStorage: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', URL: 'readonly', window: 'readonly', indexedDB: 'readonly', localStorage: 'readonly', sessionStorage: 'readonly', navigator: 'readonly', document: 'readonly', caches: 'readonly' } },
   },
 );

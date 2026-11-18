@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { I18nProvider } from './services/i18n';
 import { SyncProvider } from './services/sync';
 
 const rootElement = document.getElementById('root');
@@ -17,8 +18,18 @@ if (window.self !== window.top) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <SyncProvider>
-      <App />
-    </SyncProvider>
+    <I18nProvider>
+      <SyncProvider>
+        <App />
+      </SyncProvider>
+    </I18nProvider>
   </StrictMode>,
 );
+
+// The service worker keeps a copy of the app files, so that the app opens
+// with no connection. It is not used in dev mode, where files change often.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('./sw.js');
+  });
+}

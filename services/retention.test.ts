@@ -79,7 +79,7 @@ async function storedText(dbName: string): Promise<string> {
 
 describe('browser database', () => {
   it('does not keep the text of a deleted record', async () => {
-    const session = openSession({ keys: null, signaling: [], memberId: 'me', onPeers: () => {}, onSignaling: () => {} });
+    const session = openSession({ keys: null, signaling: [], memberId: 'me', persist: true });
     await session.ready;
     const map = session.doc.getMap('sightings');
     map.set('s1', { id: 's1', timestamp: Date.now(), location: 'Secret meeting corner' });

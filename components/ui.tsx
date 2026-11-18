@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { Dices, Eye, EyeOff, HardDrive, Lock, Wifi, WifiOff, X, type LucideIcon } from 'lucide-react';
 import { useT } from '../services/i18n';
-import { generatePassphrase, isWeakPassphrase } from '../services/passphrase';
+import { generatePassphrase, passphraseProblem } from '../services/passphrase';
 import { useSync } from '../services/sync';
 
 export const inputClass =
@@ -246,7 +246,9 @@ export function PassphraseInput({ value, onChange, allowGenerate = false, autoFo
           />
         )}
       </div>
-      {allowGenerate && value !== '' && isWeakPassphrase(value) && <Notice tone="warning">{t('passphrase.weak')}</Notice>}
+      {allowGenerate && value !== '' && passphraseProblem(value) && (
+        <Notice tone="warning">{t(`passphrase.problem.${passphraseProblem(value) ?? 'short'}`)}</Notice>
+      )}
     </div>
   );
 }
@@ -286,7 +288,7 @@ export function PassphraseModal({ title, note, actionLabel, create, onSubmit, on
           <PassphraseInput value={passphrase} onChange={setPassphrase} allowGenerate={create} autoFocus />
         </Field>
         {failed && <Notice tone="error">{t('crypto.failed')}</Notice>}
-        <Button type="submit" className="w-full" disabled={busy || passphrase === ''}>
+        <Button type="submit" className="w-full" disabled={busy || passphrase === '' || (create && passphraseProblem(passphrase) !== null)}>
           {busy ? t('common.working') : actionLabel}
         </Button>
       </form>

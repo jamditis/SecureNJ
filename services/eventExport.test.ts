@@ -95,7 +95,7 @@ describe('event page', () => {
   });
 
   it('contains no address of an external resource', async () => {
-    const payload = await encryptText(JSON.stringify(event), 'passphrase for the test');
+    const payload = await encryptText(JSON.stringify(event), 'river tulip nine window');
     const html = buildEventPage(payload, labels);
     expect(html).not.toMatch(/https?:\/\//);
     expect(html).toContain("default-src 'none'");
@@ -108,7 +108,7 @@ describe('event page', () => {
   });
 
   it('escapes markup in labels', async () => {
-    const payload = await encryptText('{}', 'passphrase for the test');
+    const payload = await encryptText('{}', 'river tulip nine window');
     const html = buildEventPage(payload, { ...labels, pageTitle: '<img src=x>', unlock: '</script>' });
     const dom = openPage(html);
     expect(dom.window.document.querySelector('img')).toBeNull();
