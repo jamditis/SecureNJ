@@ -1,0 +1,78 @@
+name: Publish to the live site
+
+# This workflow runs only when a person starts it in the Actions tab.
+# A push or a merge never starts it.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "publish" to replace the live site with the build of this branch'
+        required: true
+        type: string
+
+# One publish at a time.
+concurrency:
+  group: publish-live-site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # To write the build to the gh-pages branch, which GitHub Pages serves.
+      contents: write
+    env:
+      CONFIRM: ${{ inputs.confirm }}
+      # Optional repository variables (Settings, then "Secrets and variables", then "Variables").
+      VITE_SIGNALING_URLS: ${{ vars.VITE_SIGNALING_URLS }}
+      VITE_SITE_URL: ${{ vars.VITE_SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+    steps:
+      - name: Stop unless the person typed "publish"
+        run: |
+          if [ "$CONFIRM" != "publish" ]; then
+            echo "The confirm field must be the word: publish"
+            exit 1
+          fi
+      - name: Stop unless this is the main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Publish only from the main branch."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The same checks as CI. A build that fails a check is not published.
+      # The check makes the build in `dist/`, with the settings above.
+      - run: npm run check
+      - name: Write the build to the gh-pages branch
+        env:
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          git fetch --depth 1 origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add "$site" -B gh-pages origin/gh-pages
+          # Replace all files, and keep the history of the branch.
+          find "$site" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R dist/. "$site/"
+          # GitHub Pages must serve the files as they are.
+          touch "$site/.nojekyll"
+          cd "$site"
+          git config user.name "$ACTOR"
+          git config user.email "${ACTOR_ID}+${ACTOR}@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The live site already has this build."
+            exit 0
+          fi
+          git commit -m "Publish main at ${GITHUB_SHA::7}"
+          git push origin gh-pages

@@ -92,10 +92,10 @@ Ported from the published site:
 
 Not done, for a person to do:
 
-- [ ] A native speaker reviews the Spanish text. Strings with an open choice: "reporte" for both an alert report and a check-in; "despejado" for "clear"; "postura" for a position; "preocupación" for a concern; the one legal sentence in the witness notes notice.
+- [ ] A native speaker reviews the Spanish text. Until then, the Spanish UI shows a note that the text is a machine translation. After the review, add `es` to `REVIEWED_LOCALES` in `components/LanguageSwitch.tsx`. Strings with an open choice: "reporte" for both an alert report and a check-in; "despejado" for "clear"; "postura" for a position; "preocupación" for a concern; the one legal sentence in the witness notes notice.
 - [ ] A person confirms the rapid response hotline number (1-800-308-0878), which comes from the published site.
 - [ ] Test the photo cleaner in Safari and Firefox. It was tested in Chromium only.
-- [ ] Decide when to publish. The live site still serves the old build.
+- [ ] Publish: run the workflow "Publish to the live site" in the Actions tab when you are ready. The live site still serves the old build.
 
 ## Known limits, not in either pull request
 

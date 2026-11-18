@@ -75,6 +75,18 @@ Serve the `dist/` folder from any static host over HTTPS. The build uses relativ
 
 Optional build settings go in `.env.local`. See [.env.example](.env.example).
 
+## Publish to GitHub Pages
+
+A push or a merge does not change the live site. To publish:
+
+1. Open the Actions tab of the repository.
+2. Select "Publish to the live site", then "Run workflow", on the `main` branch.
+3. Type `publish` in the confirm field.
+
+The workflow runs all checks, builds `main`, and writes the build to the `gh-pages` branch, which GitHub Pages serves. A build that fails a check is not published. The history of `gh-pages` keeps each earlier build.
+
+Optional repository variables: `VITE_SIGNALING_URLS` (the default signaling servers) and `VITE_SITE_URL` (the address for link previews, if the site has its own domain).
+
 ## Check your changes
 
 ```bash

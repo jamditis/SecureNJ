@@ -3,6 +3,8 @@ const platform = {
   'app.title': 'Local resilience toolkit',
 
   'language.label': 'Language',
+  'language.machineNote': 'This text is a machine translation. A person has not reviewed it yet.',
+  'language.report': 'Report an error',
 
   'device.open': 'Data on this device',
   'device.backupTitle': 'Backup',

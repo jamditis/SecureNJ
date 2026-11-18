@@ -1,10 +1,11 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { Database, Languages, Menu, Shield, X } from 'lucide-react';
+import { Database, Menu, Shield, X } from 'lucide-react';
 import ConsensusBuilder from './components/ConsensusBuilder';
 import Dashboard from './components/Dashboard';
 import DeviceDialog from './components/DeviceDialog';
 import EventCreator from './components/EventCreator';
 import FamilyPlan from './components/FamilyPlan';
+import LanguageSwitch from './components/LanguageSwitch';
 import LimitsPage from './components/LimitsPage';
 import LockFile from './components/LockFile';
 import MutualAid from './components/MutualAid';
@@ -23,7 +24,7 @@ import SupplyInventory from './components/SupplyInventory';
 import TacticalWhiteboard from './components/TacticalWhiteboard';
 import { Notice } from './components/ui';
 import WitnessNotes from './components/WitnessNotes';
-import { LOCALES, useI18n, type Locale } from './services/i18n';
+import { useI18n } from './services/i18n';
 import { readInvite, type Invite } from './services/invite';
 import { ToolScope, useRooms } from './services/sync';
 import { hasUnsavedWork } from './services/unsaved';
@@ -83,7 +84,7 @@ function Page({ id, payload, title, shared, onSelectTool }: PageProps) {
 }
 
 export default function App() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const { setLastRoom } = useRooms();
   const [invite, setInvite] = useState<Invite | null>(null);
   // The address holds the page, for example "#/phone-tree". A link to a page
@@ -181,21 +182,7 @@ export default function App() {
             >
               <Database className="w-4 h-4" aria-hidden="true" /> {t('device.open')}
             </button>
-            <label className="flex items-center gap-2 px-4 text-sm">
-              <Languages className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span className="sr-only">{t('language.label')}</span>
-              <select
-                value={locale}
-                onChange={(event) => setLocale(event.target.value as Locale)}
-                className="flex-1 bg-slate-800 text-white rounded-lg px-2 py-1.5 text-sm"
-              >
-                {(Object.keys(LOCALES) as Locale[]).map((code) => (
-                  <option key={code} value={code} lang={code}>
-                    {LOCALES[code].label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <LanguageSwitch />
             <p className="text-xs leading-relaxed text-slate-500">{t('nav.privacy')}</p>
           </div>
         </div>

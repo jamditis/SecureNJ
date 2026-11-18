@@ -19,6 +19,8 @@ const OLD_SITE_KEYS = /^(securenj-|mutual-aid-settings$)/;
 const OLD_SITE_DATABASE = /^[0-9a-f]{64}$/;
 const DATABASE_PREFIX = 'snj-';
 const CACHE_PREFIX = 'snj-app-';
+/** The site that this app replaces used this prefix for its caches, at the same address. */
+const OLD_SITE_CACHE_PREFIX = 'securenj-';
 const KNOWN_DATABASES = ['snj-local', 'snj-private'];
 const REGISTRY_KEY = 'snj.databases';
 const DELETE_TIMEOUT_MS = 3_000;
@@ -114,7 +116,7 @@ export async function eraseDevice(local: Storage = localStorage, session: Storag
     await step(async () => (await Promise.all((await ownDatabases(registered)).map(deleteDatabase))).every(Boolean)),
     await step(async () => {
       if (typeof caches === 'undefined') return;
-      const own = (await caches.keys()).filter((key) => key.startsWith(CACHE_PREFIX));
+      const own = (await caches.keys()).filter((key) => key.startsWith(CACHE_PREFIX) || key.startsWith(OLD_SITE_CACHE_PREFIX));
       await Promise.all(own.map((key) => caches.delete(key)));
     }),
     await step(async () => {
