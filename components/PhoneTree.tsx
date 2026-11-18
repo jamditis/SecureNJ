@@ -140,10 +140,17 @@ export default function PhoneTree() {
               ) : (
                 contacts.map((contact) => (
                   <tr key={contact.id}>
-                    <td className="px-5 py-3 font-bold text-slate-900">{contact.name}</td>
-                    <td className="px-5 py-3 font-mono text-slate-600">{contact.contact}</td>
+                    {/* A cell keeps the alignment of its column. The text inside takes its own direction; a phone number is left to right. */}
+                    <td className="px-5 py-3 font-bold text-slate-900">
+                      <bdi>{contact.name}</bdi>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-slate-600">
+                      <span dir="ltr">{contact.contact}</span>
+                    </td>
                     <td className="px-5 py-3">{t(`tree.role.${contact.role}`)}</td>
-                    <td className="px-5 py-3 text-slate-500">{contact.notes}</td>
+                    <td className="px-5 py-3 text-slate-500">
+                      <bdi>{contact.notes}</bdi>
+                    </td>
                     <td className="px-5 py-1 text-end">
                       <IconButton icon={Trash2} label={t('tree.remove', { name: contact.name })} onClick={() => map.delete(contact.id)} />
                     </td>
@@ -154,13 +161,13 @@ export default function PhoneTree() {
           </table>
         </div>
         <form onSubmit={add} className="p-5 bg-slate-50 border-t border-slate-100 grid grid-cols-1 md:grid-cols-5 gap-3">
-          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t('tree.field.name')} aria-label={t('tree.field.name')} className={`${inputClass} !bg-white`} />
-          <input value={draft.contact} onChange={(e) => setDraft({ ...draft, contact: e.target.value })} placeholder={t('tree.field.contact')} aria-label={t('tree.field.contact')} className={`${inputClass} !bg-white`} />
+          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} dir="auto" placeholder={t('tree.field.name')} aria-label={t('tree.field.name')} className={`${inputClass} !bg-white`} />
+          <input value={draft.contact} onChange={(e) => setDraft({ ...draft, contact: e.target.value })} dir="ltr" placeholder={t('tree.field.contact')} aria-label={t('tree.field.contact')} className={`${inputClass} !bg-white`} />
           <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as ContactRole })} aria-label={t('tree.field.role')} className={`${inputClass} !bg-white`}>
             <option value="Member">{t('tree.role.Member')}</option>
             <option value="Lead">{t('tree.role.Lead')}</option>
           </select>
-          <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder={t('tree.field.notes')} aria-label={t('tree.field.notes')} className={`${inputClass} !bg-white`} />
+          <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} dir="auto" placeholder={t('tree.field.notes')} aria-label={t('tree.field.notes')} className={`${inputClass} !bg-white`} />
           <Button type="submit" variant="dark">
             <Plus className="w-4 h-4" aria-hidden="true" /> {t('tree.add')}
           </Button>
