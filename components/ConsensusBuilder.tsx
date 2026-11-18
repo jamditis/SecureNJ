@@ -58,8 +58,9 @@ export default function ConsensusBuilder() {
     if (!window.confirm(t('consensus.deleteConfirm'))) return;
     doc.transact(() => {
       proposalMap.delete(proposal.id);
-      voteMap.forEach((vote, key) => {
-        if (vote.proposalId === proposal.id) voteMap.delete(key);
+      // The map can hold a bad record from a peer, so check each value.
+      voteMap.forEach((vote: unknown, key) => {
+        if (isVote(vote) && vote.proposalId === proposal.id) voteMap.delete(key);
       });
     });
   };

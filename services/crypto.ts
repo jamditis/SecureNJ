@@ -21,6 +21,12 @@ const FILE_MAGIC = new Uint8Array([0x53, 0x4e, 0x4a, 0x32]); // "SNJ2"
 
 /** The largest file that the browser encrypts in memory. */
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+/**
+ * The largest container that the browser decrypts. A container is larger
+ * than its file: it adds the name, the type, the salt, the nonce, and the
+ * authentication tag.
+ */
+export const MAX_CONTAINER_BYTES = MAX_FILE_BYTES + 64 * 1024;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DecryptionError,
+  MAX_CONTAINER_BYTES,
+  MAX_FILE_BYTES,
   base64ToBytes,
   bytesToBase64,
   decryptFile,
@@ -121,6 +123,15 @@ describe('file encryption', () => {
   it('accepts the file passphrase with a space at the end', async () => {
     const sealed = await encryptFile({ name: 'a', type: '', bytes: new Uint8Array([7]) }, PASSPHRASE);
     expect((await decryptFile(sealed, `${PASSPHRASE} `)).bytes).toEqual(new Uint8Array([7]));
+  });
+
+  it('permits a container that is larger than the file limit by the size of the format data', async () => {
+    // A file at the size limit must decrypt again. The container adds the
+    // name, the type, the salt, the nonce, and the authentication tag.
+    const bytes = new Uint8Array(1000);
+    const sealed = await encryptFile({ name: 'n'.repeat(255), type: 't'.repeat(255), bytes }, PASSPHRASE);
+    expect(sealed.length).toBeGreaterThan(bytes.length);
+    expect(sealed.length - bytes.length).toBeLessThanOrEqual(MAX_CONTAINER_BYTES - MAX_FILE_BYTES);
   });
 
   it('rejects the wrong passphrase and data that is not a container', async () => {

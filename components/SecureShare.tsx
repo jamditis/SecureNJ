@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Check, Copy, Lock, Unlock } from 'lucide-react';
-import { MAX_FILE_BYTES, decryptFile, decryptText, encryptFile, encryptText } from '../services/crypto';
+import {
+  MAX_CONTAINER_BYTES,
+  MAX_FILE_BYTES,
+  decryptFile,
+  decryptText,
+  encryptFile,
+  encryptText,
+} from '../services/crypto';
 import { downloadBlob } from '../services/download';
 import { useT } from '../services/i18n';
 import { Button, Field, Notice, PassphraseInput, ToolHeader, inputClass } from './ui';
@@ -52,7 +59,8 @@ export default function SecureShare() {
       return;
     }
     if (!file) return;
-    if (file.size > MAX_FILE_BYTES) {
+    // A file at the limit must decrypt again, so the limit for a container is higher.
+    if (file.size > (mode === 'encrypt' ? MAX_FILE_BYTES : MAX_CONTAINER_BYTES)) {
       setMessage({ tone: 'error', text: t('share.tooLarge') });
       return;
     }

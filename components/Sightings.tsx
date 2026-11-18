@@ -38,8 +38,9 @@ export default function Sightings() {
     (ids: string[]) => {
       doc.transact(() => {
         ids.forEach((id) => map.delete(id));
-        confirmationMap.forEach((confirmation, key) => {
-          if (ids.includes(confirmation.sightingId)) confirmationMap.delete(key);
+        // The map can hold a bad record from a peer, so check each value.
+        confirmationMap.forEach((confirmation: unknown, key) => {
+          if (isConfirmation(confirmation) && ids.includes(confirmation.sightingId)) confirmationMap.delete(key);
         });
       });
     },

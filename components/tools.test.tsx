@@ -77,6 +77,19 @@ describe('safety alerts', () => {
     expect(Array.from(sync.doc.getMap('confirmations').keys())).toEqual(['s2:a']);
   });
 
+  it('deletes a report when a peer sent a bad confirmation', async () => {
+    const user = userEvent.setup();
+    const sync = createTestSync();
+    sync.doc.getMap('sightings').set('s1', sighting());
+    sync.doc.getMap<unknown>('confirmations').set('bad', null);
+    sync.doc.getMap<unknown>('confirmations').set('worse', 'text');
+    sync.doc.getMap('confirmations').set('s1:a', { sightingId: 's1', memberId: 'a' });
+    renderWithSync(<Sightings />, sync);
+    await user.click(screen.getByRole('button', { name: 'Delete the report' }));
+    expect(sync.doc.getMap('sightings').size).toBe(0);
+    expect(Array.from(sync.doc.getMap('confirmations').keys())).toEqual(['bad', 'worse']);
+  });
+
   it('ignores a record that is stored under a key that is not its ID', () => {
     // Delete uses the ID as the key. A record under a different key could not be deleted.
     const sync = createTestSync();
@@ -308,6 +321,19 @@ describe('consensus builder', () => {
     await user.click(screen.getByRole('button', { name: /^Block/ }));
     expect(votes.size).toBe(0);
     expect(screen.getByText('No positions')).toBeTruthy();
+  });
+
+  it('deletes a proposal when a peer sent a bad position', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const sync = createTestSync();
+    sync.doc.getMap('proposals').set('p1', { id: 'p1', text: 'Meet on Thursday', timestamp: 1, status: 'active' });
+    sync.doc.getMap<unknown>('votes').set('bad', null);
+    sync.doc.getMap('votes').set('p1:a', { proposalId: 'p1', memberId: 'a', type: 'support', concern: '', name: '' });
+    renderWithSync(<ConsensusBuilder />, sync);
+    await user.click(screen.getByRole('button', { name: 'Delete the proposal' }));
+    expect(sync.doc.getMap('proposals').size).toBe(0);
+    expect(Array.from(sync.doc.getMap('votes').keys())).toEqual(['bad']);
   });
 
   it('does not accept positions on a closed proposal', () => {
